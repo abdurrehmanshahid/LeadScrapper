@@ -712,3 +712,66 @@ window.pushCallerLeadToClay = async function() {
     btn.disabled = false;
   }
 };
+
+// ─── 8 Specialized Buyer Persona Pitch Engine ────────────────────────────────
+
+const PERSONA_SCRIPTS = {
+  FOUNDER_CEO: {
+    label: 'Founder / CEO',
+    getScript: (lead) => `Hi, calling from Big Binary Tech's technical advisory team. We recently ran an operations audit on ${lead.name}. As the Founder, when headcount grows faster than internal systems, operations teams get bogged down in manual workarounds. We act as an outsourced product & engineering partner to modernize workflows and cut admin drag by 60% with zero downtime. Do you have 2 minutes to hear the 3 diagnostic points we identified?`
+  },
+  OPERATIONS_COO: {
+    label: 'COO / Operations Director',
+    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with COOs and Operations Directors to eliminate stock variances, accelerate branch coordination, and remove manual dispatch workarounds with unified Odoo ERP and POS automation. I noticed ${lead.name}'s backend has a couple of synchronization gaps between field orders and inventory. Are manual handoffs costing your ops team time each week?`
+  },
+  FINANCE_CFO: {
+    label: 'CFO / Finance Director',
+    getScript: (lead) => `Hi, calling from Big Binary Tech's ERP solutions team. We help CFOs and Finance Directors eliminate late month-end closes, automate AP/AR reconciliation, and ensure 100% compliance with ZATCA/VAT e-invoicing and Making Tax Digital. When systems don't talk to accounting, businesses lose hours on manual data matching. How is your finance team currently managing cross-system reconciliation?`
+  },
+  REVOPS_CRM: {
+    label: 'Head of Revenue Operations',
+    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with RevOps and CRM Directors to bridge real-time synchronization between CRM (HubSpot/Salesforce/Zoho) and Odoo ERP, automate WhatsApp-to-CRM lead capture, and keep sales and finance perfectly aligned. We eliminate duplicate data entry between pipeline and billing. Is lead routing or billing sync a friction point right now?`
+  },
+  HR_PEOPLE: {
+    label: 'HR Director / People Ops',
+    getScript: (lead) => `Hi, Big Binary Tech here. We help HR Directors and People Ops leaders automate onboarding, employee self-service portals, and WPS/GOSI compliance reporting across UAE/KSA. In fact, we recently helped a regional firm reduce their monthly WPS reporting and onboarding cycle from 3 days down to under 2 hours. Would an automated HR workflow bridge be valuable for your team?`
+  },
+  TECH_CIO_CTO: {
+    label: 'CIO / CTO / Head of IT',
+    getScript: (lead) => `Hi, calling from Big Binary Tech's engineering team. We act as the specialized 24/7 ERP infrastructure and integration partner for CIOs and IT Directors. We deliver resilient API bridges, role-based security audits, and guaranteed 15-minute SLA ticket support at half standard partner rates — without overburdening your internal developers. Could your IT team benefit from specialized Odoo infrastructure support?`
+  },
+  RETAIL_RESTAURANT_POS: {
+    label: 'Retail / Restaurant Ops Director',
+    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with retail and restaurant operations to deploy zero-downtime multi-branch POS, KDS, hardware integration, and real-time inventory tracking. We help managers prevent store checkout slowdowns, eliminate stock discrepancies, and speed up table turns. Are POS hardware glitches or multi-store stock sync an issue across your locations?`
+  },
+  MARKETING_GROWTH: {
+    label: 'VP Marketing / Head of Growth',
+    getScript: (lead) => `Hi, calling from Big Binary Tech's growth advisory group. We work with Marketing Leaders and Growth Directors to build high-converting inbound funnels, localized Arabic/English lead capture, and automated attribution tracking so every dollar spent links directly to closed deals. Are you looking to lower customer acquisition costs or improve lead quality this quarter?`
+  }
+};
+
+window.setCallerPersona = function(personaKey) {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const personaConfig = PERSONA_SCRIPTS[personaKey] || PERSONA_SCRIPTS.FOUNDER_CEO;
+
+  // Update button active states
+  document.querySelectorAll('.persona-btn').forEach(btn => {
+    if (btn.getAttribute('data-persona') === personaKey) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Update badge
+  const badge = document.getElementById('activePersonaBadge');
+  if (badge) badge.textContent = personaConfig.label;
+
+  // Update Script box
+  const scriptBox = document.getElementById('callScriptBox');
+  if (scriptBox) {
+    scriptBox.textContent = personaConfig.getScript(lead);
+  }
+};

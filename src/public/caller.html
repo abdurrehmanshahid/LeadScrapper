@@ -175,11 +175,27 @@
           <ul id="callProblemList" class="problem-list"></ul>
         </div>
 
-        <!-- 30s Elevator Hook -->
+        <!-- 30s Elevator Hook with 8 Persona Switcher -->
         <div style="margin-bottom: 1.25rem;">
-          <h4 style="font-size: 0.8rem; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-            🗣️ 30-Second Cold Call Hook:
-          </h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+            <h4 style="font-size: 0.8rem; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+              🗣️ 30-Second Consultative Script (Targeted by Buyer Role):
+            </h4>
+            <span id="activePersonaBadge" style="font-size: 0.72rem; color: #a78bfa; font-weight: 700; background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.3); border-radius: 4px; padding: 0.15rem 0.5rem;">Founder / CEO</span>
+          </div>
+
+          <!-- 8 Persona Buttons -->
+          <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.6rem;">
+            <button onclick="setCallerPersona('FOUNDER_CEO')" class="persona-btn active" data-persona="FOUNDER_CEO">🏢 Founder / CEO</button>
+            <button onclick="setCallerPersona('OPERATIONS_COO')" class="persona-btn" data-persona="OPERATIONS_COO">👔 COO / Ops (ERP/POS)</button>
+            <button onclick="setCallerPersona('FINANCE_CFO')" class="persona-btn" data-persona="FINANCE_CFO">💰 CFO (ZATCA/e-Invoice)</button>
+            <button onclick="setCallerPersona('REVOPS_CRM')" class="persona-btn" data-persona="REVOPS_CRM">📈 RevOps (CRM/WhatsApp)</button>
+            <button onclick="setCallerPersona('HR_PEOPLE')" class="persona-btn" data-persona="HR_PEOPLE">👥 HR (WPS/GOSI)</button>
+            <button onclick="setCallerPersona('TECH_CIO_CTO')" class="persona-btn" data-persona="TECH_CIO_CTO">⚙️ CIO/CTO (SLA/APIs)</button>
+            <button onclick="setCallerPersona('RETAIL_RESTAURANT_POS')" class="persona-btn" data-persona="RETAIL_RESTAURANT_POS">🛒 Retail/Restaurant POS</button>
+            <button onclick="setCallerPersona('MARKETING_GROWTH')" class="persona-btn" data-persona="MARKETING_GROWTH">📣 VP Growth</button>
+          </div>
+
           <div id="callScriptBox" class="script-box"></div>
         </div>
 
