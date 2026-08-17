@@ -1,31 +1,26 @@
 @echo off
-title Big Binary Tech - Lead Intelligence & SDR Engine
+setlocal
+title Big Binary Tech - Lead Engine
 color 0B
 
 echo ===============================================================================
 echo                BIG BINARY TECH - LEAD INTELLIGENCE ENGINE
-echo         Zero-API-Cost Lead Discovery, Web Audit ^& ML Propensity Scorer
+echo         Zero-API-Cost Lead Discovery, Web Audit and ML Propensity Scorer
 echo ===============================================================================
 echo.
 
 :: 1. Add common Node.js install directories to PATH
-if exist "C:\Program Files\nodejs\node.exe" (
-    set "PATH=C:\Program Files\nodejs;%PATH%"
-)
-if exist "C:\Program Files (x86)\nodejs\node.exe" (
-    set "PATH=C:\Program Files (x86)\nodejs;%PATH%"
-)
-if exist "%LOCALAPPDATA%\Programs\node\node.exe" (
-    set "PATH=%LOCALAPPDATA%\Programs\node;%PATH%"
-)
+if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;%PATH%"
+if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;%PATH%"
+if exist "%LOCALAPPDATA%\Programs\node\node.exe" set "PATH=%LOCALAPPDATA%\Programs\node;%PATH%"
 
 :: 2. Check if Node.js is installed
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js was not found on this computer!
     echo.
-    echo Please install Node.js (LTS version) from: https://nodejs.org
-    echo Once installed, double-click run.bat again.
+    echo Please install Node.js LTS from: https://nodejs.org
+    echo Once installed, run this script again.
     echo.
     pause
     exit /b 1
@@ -37,10 +32,10 @@ if not exist "node_modules\" (
     echo [*] This takes about 30 seconds...
     echo.
     call npm install
-    if %errorlevel% neq 0 (
+    if errorlevel 1 (
         echo.
         echo [ERROR] Failed to install npm packages.
-        echo Please check your internet connection and try running: npm install
+        echo Please check your internet connection and run: npm install
         echo.
         pause
         exit /b 1
@@ -52,9 +47,7 @@ if not exist "node_modules\" (
 
 :: 4. Check for .env configuration
 if not exist ".env" (
-    if exist ".env.example" (
-        copy ".env.example" ".env" >nul 2>nul
-    )
+    if exist ".env.example" copy ".env.example" ".env" >nul 2>nul
     echo [i] Created default .env file.
 )
 
