@@ -9,10 +9,24 @@ echo         Zero-API-Cost Lead Discovery, Web Audit and ML Propensity Scorer
 echo ===============================================================================
 echo.
 
-:: 1. Add common Node.js install directories to PATH
+:: 1. Add common Node.js and Git install directories to PATH
 if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;%PATH%"
 if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;%PATH%"
 if exist "%LOCALAPPDATA%\Programs\node\node.exe" set "PATH=%LOCALAPPDATA%\Programs\node;%PATH%"
+if exist "C:\Program Files\Git\cmd\git.exe" set "PATH=C:\Program Files\Git\cmd;%PATH%"
+
+:: 1b. Auto-pull latest updates from GitHub if Git is available
+where git >nul 2>nul
+if %errorlevel% equ 0 (
+    if exist ".git\" (
+        echo [*] Checking for latest updates and leads from GitHub...
+        git pull --quiet 2>nul
+        if %errorlevel% equ 0 (
+            echo [*] System is up to date!
+        )
+        echo.
+    )
+)
 
 :: 2. Check if Node.js is installed
 where node >nul 2>nul
