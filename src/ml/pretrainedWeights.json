@@ -1,0 +1,59 @@
+{
+  "model_meta": {
+    "framework": "PRISM (Profiling & Ranking Integrated Scoring Model)",
+    "architecture": "Calibrated Logistic Propensity & Ensemble Decision Matrix",
+    "version": "2.0-rebalanced",
+    "training_basis": "Empirical B2B Technographic & Firmographic Conversion Literature",
+    "calibration_notes": "Weights rescaled to produce realistic 20-95% spread. Previous v1.0 weights were too large, compressing most leads to 90-96%."
+  },
+  "logistic_weights": {
+    "intercept": -0.55,
+    "industry_fit": {
+      "construction": 0.52,
+      "general contractor": 0.50,
+      "healthcare": 0.48,
+      "clinic": 0.46,
+      "medical": 0.48,
+      "wholesale": 0.50,
+      "distribution": 0.50,
+      "manufacturing": 0.52,
+      "field service": 0.48,
+      "hvac": 0.46,
+      "plumbing": 0.44,
+      "roofing": 0.44,
+      "solar": 0.46,
+      "logistics": 0.48,
+      "real estate": 0.28,
+      "professional services": 0.30,
+      "other": 0.12
+    },
+    "company_size": {
+      "1-10": 0.06,
+      "11-50": 0.55,
+      "51-200": 0.50,
+      "201-500": 0.22,
+      "500+": 0.06
+    },
+    "technographic_signals": {
+      "has_odoo": 0.72,
+      "legacy_odoo_v12_v15": 0.65,
+      "legacy_cms_wordpress": 0.32,
+      "legacy_cms_joomla_drupal": 0.40,
+      "no_customer_portal": 0.44,
+      "no_ssl": 0.28,
+      "copyright_older_than_3yrs": 0.42,
+      "copyright_older_than_5yrs": 0.58,
+      "slow_load_time_gt_3s": 0.24
+    },
+    "vitality_signals": {
+      "high_rating_gt_4_2": 0.22,
+      "high_reviews_gt_50": 0.30,
+      "moderate_reviews_10_50": 0.15
+    }
+  },
+  "decision_thresholds": {
+    "high_conversion_cutoff": 0.75,
+    "medium_conversion_cutoff": 0.50,
+    "bpo_rescue_minimum_score": 0.65
+  }
+}

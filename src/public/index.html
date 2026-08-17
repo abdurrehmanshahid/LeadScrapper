@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Big Binary Tech - Lead Intelligence Engine</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header -->
+  <header class="navbar">
+    <div class="brand">
+      <img src="images/logo.png" alt="Big Binary Tech Logo" class="brand-logo-img">
+      <div class="brand-text">
+        <h1>BIG BINARY <span class="tech-tag">TECH</span></h1>
+        <span class="sub-title">Lead Intelligence & ML Propensity Engine</span>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <a href="caller.html" class="btn btn-accent">📞 Open SDR Caller View</a>
+      <button id="exportCsvBtn" class="btn btn-secondary">📥 Export CSV</button>
+      <button id="clearLeadsBtn" class="btn btn-secondary btn-sm" style="color: #fb7185;">🗑️ Clear Data</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Stat Cards Grid -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-header">Total Leads in Database</div>
+        <div class="stat-value" id="statTotalLeads" style="color: #6366f1;">0</div>
+        <div class="stat-footer">Stored locally in JSON flat-file</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">Odoo BPO / Rescue Leads</div>
+        <div class="stat-value" id="statBpoRescues" style="color: #c084fc;">0</div>
+        <div class="stat-footer">High-ticket 11–200 employee size</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">New Implementations</div>
+        <div class="stat-value" id="statNewImpl" style="color: #38bdf8;">0</div>
+        <div class="stat-footer">Legacy web & spreadsheet users</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">High Conversion Fit (≥75%)</div>
+        <div class="stat-value" id="statHighFit" style="color: #34d399;">0</div>
+        <div class="stat-footer">PRISM ML Propensity Score</div>
+      </div>
+    </section>
+
+    <!-- Scraper Control Panels -->
+    <section class="scraper-grid">
+      <!-- Panel 1: Google Maps / Local Scraper -->
+      <div class="panel">
+        <div class="panel-title">
+          <span>📍</span> Pipeline A: Google Maps Discovery (New Implementations)
+        </div>
+        <div class="panel-desc">Search high-ticket local industries (Contractors, Healthcare, Wholesale) and audit their digital gaps.</div>
+        
+        <form id="gmapsForm">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label class="form-label">Target Industry / Keyword</label>
+              <input type="text" id="gmapsQuery" class="form-control" placeholder="e.g. Commercial Roofing, Dental Clinics, Wholesalers" value="Commercial Roofing Contractors" required>
+            </div>
+            <div class="form-group" style="flex: 1.5;">
+              <label class="form-label">City / Region</label>
+              <input type="text" id="gmapsLocation" class="form-control" placeholder="e.g. Dallas, TX or Dubai" value="Dallas, TX" required>
+            </div>
+            <div class="form-group" style="flex: 0.8;">
+              <label class="form-label">Count</label>
+              <input type="number" id="gmapsMax" class="form-control" value="15" min="1" max="500">
+            </div>
+          </div>
+          <button type="submit" id="startGmapsBtn" class="btn btn-primary" style="width: 100%;">
+            🚀 Start Discovery & Technographic Audit
+          </button>
+        </form>
+      </div>
+
+      <!-- Panel 2: Odoo BPO / Rescue Scraper -->
+      <div class="panel">
+        <div class="panel-title">
+          <span>🛡️</span> Pipeline B: Odoo Customer Rescue & BPO Mining
+        </div>
+        <div class="panel-desc">Discover active Odoo users (11–200 size) to pitch 24/7 BPO support, maintenance & v18 upgrades.</div>
+        
+        <form id="odooForm">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label class="form-label">Target Region</label>
+              <select id="odooRegion" class="form-control">
+                <option value="north america">🇺🇸 North America (USA)</option>
+                <option value="canada">🇨🇦 Canada</option>
+                <option value="uk">🇬🇧 United Kingdom</option>
+                <option value="australia">🇦🇺 Australia</option>
+                <option value="germany">🇩🇪 Germany</option>
+                <option value="france">🇫🇷 France</option>
+                <option value="uae">🇦🇪 UAE / Middle East</option>
+                <option value="gcc">🌍 GCC Region</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1.5;">
+              <label class="form-label">Target Industry</label>
+              <select id="odooIndustry" class="form-control">
+                <option value="All">All High-Ticket Niches</option>
+                <option value="Wholesale & Distribution">Wholesale & Distribution</option>
+                <option value="Healthcare & Medical Devices">Healthcare & Medical Devices</option>
+                <option value="Construction & Field">Construction & Field</option>
+                <option value="Manufacturing">Manufacturing</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 0.8;">
+              <label class="form-label">Count</label>
+              <input type="number" id="odooMax" class="form-control" value="20" min="1" max="500">
+            </div>
+          </div>
+          <button type="submit" id="startOdooBtn" class="btn btn-secondary" style="width: 100%; border-color: var(--accent-purple); color: #c084fc;">
+            ⚡ Mine Odoo BPO / Rescue Opportunities
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Live Terminal Status -->
+    <div id="terminalContainer" style="display: none; margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+        <span style="font-size: 0.75rem; color: #38bdf8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
+          ⚡ Live Scraping & Audit Pipeline Activity
+        </span>
+        <span id="jobBadge" class="badge badge-new">IDLE</span>
+      </div>
+      <div id="terminalBox" class="terminal-box"></div>
+    </div>
+
+    <!-- Lead Filters & Table -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">Category:</label>
+        <select id="filterCategory" class="form-control" style="width: auto;">
+          <option value="ALL">All Categories</option>
+          <option value="NEW_IMPLEMENTATION">New Implementation</option>
+          <option value="BPO_RESCUE">Odoo BPO / Rescue</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">Min Propensity:</label>
+        <select id="filterMinScore" class="form-control" style="width: auto;">
+          <option value="0">All Scores (0%+)</option>
+          <option value="75">High Fit Only (≥ 75%)</option>
+          <option value="85">Top Tier (≥ 85%)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="form-label" style="margin-bottom:0;">Call Status:</label>
+        <select id="filterCallStatus" class="form-control" style="width: auto;">
+          <option value="ALL">All Statuses</option>
+          <option value="Uncalled">Uncalled</option>
+          <option value="Interested">Interested</option>
+          <option value="Callback Requested">Callback Requested</option>
+          <option value="No Answer / Voicemail">No Answer</option>
+          <option value="Not a Fit">Not a Fit</option>
+        </select>
+      </div>
+
+      <div class="filter-group" style="flex-grow: 1; max-width: 520px; display: flex; gap: 0.4rem;">
+        <input type="text" id="searchInput" class="form-control" placeholder="🧠 AI Semantic Search (e.g. 'construction in Texas', 'manufacturing')...">
+        <button id="aiSearchBtn" onclick="triggerAISearch()" class="btn btn-accent" style="white-space: nowrap; font-weight: 700; padding: 0.5rem 1rem;">🔍 AI Search</button>
+        <button onclick="clearSearch()" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 0.75rem;" title="Reset search">✕</button>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container">
+      <table class="leads-table">
+        <thead>
+          <tr>
+            <th>Company Name</th>
+            <th>Category</th>
+            <th>ML Success %</th>
+            <th>Industry / Location</th>
+            <th>Contact & Web</th>
+            <th>Tech Stack Footprint</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="leadsTableBody">
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-dim);">
+              No leads in database. Start a scrape above to discover opportunities!
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Lead Detail & Battlecard Modal -->
+  <div id="leadModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+        <div>
+          <h2 id="modalCompanyName" style="font-size: 1.35rem; font-weight: 800;">Company Name</h2>
+          <div id="modalMeta" style="font-size: 0.825rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button id="modalAiEnrichBtn" onclick="runLeadAiEnrich()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4); font-weight: 700;">✨ AI Auto-Enrich</button>
+          <button onclick="openDashboardEditModal()" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56,189,248,0.4); font-weight: 700;">✏️ Edit Details & Pitch</button>
+          <button id="closeModalBtn" class="btn btn-secondary btn-sm">✕ Close</button>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+        <div id="modalCategoryBadge"></div>
+        <div id="modalScorePill"></div>
+        <div id="modalSizeBadge"></div>
+      </div>
+
+      <div id="modalDecisionMakersSection" style="margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="font-size: 0.8rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">👤 Decision Makers Found</h4>
+          <button onclick="toggleModalAddContact()" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.4); color: #a78bfa; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.7rem; cursor: pointer; font-weight: 700;">+ Add Contact</button>
+        </div>
+        <div id="modalDecisionMakers" style="display: flex; flex-wrap: wrap; gap: 0.6rem;"></div>
+        <!-- Inline add-contact form -->
+        <div id="modalAddContactForm" style="display: none; margin-top: 0.65rem; background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.2); border-radius: 8px; padding: 0.75rem 0.9rem;">
+          <div style="font-size: 0.7rem; color: #a78bfa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Add Contact Manually</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-bottom: 0.45rem;">
+            <input id="modalNewContactName"     type="text" placeholder="Full Name *"          class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
+            <input id="modalNewContactTitle"    type="text" placeholder="Title / Role"         class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
+            <input id="modalNewContactEmail"    type="text" placeholder="Email (optional)"     class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
+            <input id="modalNewContactLinkedIn" type="text" placeholder="LinkedIn URL (optional)" class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
+          </div>
+          <div style="display: flex; gap: 0.4rem;">
+            <button onclick="saveModalContact()" class="btn btn-accent" style="font-size: 0.75rem; padding: 0.3rem 0.75rem;">Save</button>
+            <button onclick="toggleModalAddContact()" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.75rem;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pre-Call Intelligence Dossier -->
+      <div id="modalIntelSection" style="display: none; margin-bottom: 1rem; background: rgba(10, 185, 129, 0.07); border: 1px solid rgba(10, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1.15rem;">
+        <div style="font-size: 0.75rem; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">🔍 Pre-Call Intelligence Dossier</div>
+        <div id="modalIntelGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;"></div>
+        <div id="modalIntelNewsRow" style="display: none; margin-top: 0.5rem; padding: 0.45rem 0.7rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.78rem; color: #94a3b8;">
+          <span style="color: #f59e0b; font-weight: 700;">📰 Latest News:</span>
+          <span id="modalIntelNewsHeadline"></span>
+        </div>
+        <div id="modalIntelYelpRow" style="display: none; margin-top: 0.45rem; padding: 0.45rem 0.7rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.78rem; color: #94a3b8; font-style: italic; line-height: 1.4;">
+          <span style="color: #f43f5e; font-weight: 700; font-style: normal;">⭐ Yelp Voice:</span>
+          <span id="modalIntelYelpSnippet"></span>
+        </div>
+      </div>
+
+      <!-- AI Review Audit Dossier & Case Study Match -->
+      <div id="modalDossierSection" style="margin-bottom: 1rem; display: none; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1.15rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <span style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em;">
+            🧠 Hugging Face Review Dossier & NLI Friction
+          </span>
+          <span id="modalSemanticFitBadge" class="score-pill score-high" style="font-size: 0.725rem;">--</span>
+        </div>
+        <p id="modalDossierText" style="font-size: 0.85rem; line-height: 1.5; color: #ffffff;"></p>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <h4 style="font-size: 0.8rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.35rem;">Problem Analysis & Tech Gaps</h4>
+        <ul id="modalProblemList" class="problem-list"></ul>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <h4 style="font-size: 0.8rem; color: #818cf8; text-transform: uppercase; margin-bottom: 0.35rem;">30-Second Cold Call Elevator Hook</h4>
+        <div id="modalOpener" class="script-box"></div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <h4 style="font-size: 0.8rem; color: #34d399; text-transform: uppercase; margin-bottom: 0.35rem;">Target Offer for Big Binary Tech</h4>
+        <div id="modalOffer" style="font-size: 0.875rem; background: rgba(16, 185, 129, 0.1); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);"></div>
+      </div>
+
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <a id="modalCallerLink" href="caller.html" class="btn btn-accent">📞 Call This Lead Now</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Full Company & Pitch Edit Modal -->
+  <div id="dashboardEditModal" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1100; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal-content" style="max-width: 840px; width: 95%; max-height: 90vh; overflow-y: auto; background: #0c1427; border: 1px solid rgba(56,189,248,0.25); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+        <div>
+          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+            ✏️ Edit Company Details & Pitch
+          </h3>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Modify profile, decision makers, social channels, and pitch hooks</span>
+        </div>
+        <button onclick="closeDashboardEditModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; flex-wrap: wrap;">
+        <button id="dashTabBtnProfile" type="button" class="btn btn-sm btn-accent" onclick="switchDashboardEditTab('profile')">🏢 Company Profile</button>
+        <button id="dashTabBtnContacts" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('contacts')">👥 Decision Makers</button>
+        <button id="dashTabBtnSocial" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('social')">🌐 Social Media</button>
+        <button id="dashTabBtnPitch" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('pitch')">🎙️ Odoo Pitch & Battlecard</button>
+      </div>
+
+      <!-- Form Content -->
+      <form id="dashboardEditForm" onsubmit="event.preventDefault(); saveDashboardCompanyEdits();">
+        <!-- Tab 1: Profile -->
+        <div id="dashTabContentProfile" class="edit-tab-content">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label class="form-label">Company Name *</label>
+              <input id="dashEditName" type="text" class="form-control" required>
+            </div>
+            <div>
+              <label class="form-label">Website URL</label>
+              <input id="dashEditWebsite" type="text" class="form-control" placeholder="https://www.example.com">
+            </div>
+            <div>
+              <label class="form-label">Direct Phone</label>
+              <input id="dashEditPhone" type="text" class="form-control" placeholder="+1 (555) 000-0000">
+            </div>
+            <div>
+              <label class="form-label">Primary Email</label>
+              <input id="dashEditEmail" type="email" class="form-control" placeholder="contact@example.com">
+            </div>
+            <div>
+              <label class="form-label">Industry</label>
+              <input id="dashEditIndustry" type="text" class="form-control" placeholder="e.g. Automotive & Transportation">
+            </div>
+            <div>
+              <label class="form-label">Employee / Team Size</label>
+              <input id="dashEditSize" type="text" class="form-control" placeholder="e.g. 11-50">
+            </div>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label">Physical Street Address / Location</label>
+            <input id="dashEditAddress" type="text" class="form-control" placeholder="e.g. 123 Main St, Los Angeles, CA">
+          </div>
+        </div>
+
+        <!-- Tab 2: Contacts -->
+        <div id="dashTabContentContacts" class="edit-tab-content" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <span style="font-size: 0.8rem; color: #a78bfa; font-weight: 700; text-transform: uppercase;">Key Decision Makers</span>
+            <button type="button" onclick="addDashboardModalContactRow()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4);">+ Add Person</button>
+          </div>
+          <div id="dashModalContactsList" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;"></div>
+        </div>
+
+        <!-- Tab 3: Social Media -->
+        <div id="dashTabContentSocial" class="edit-tab-content" style="display: none;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label class="form-label">🔗 LinkedIn Company URL</label>
+              <input id="dashEditSocialLinkedIn" type="text" class="form-control" placeholder="https://www.linkedin.com/company/...">
+            </div>
+            <div>
+              <label class="form-label">🐦 Twitter / X Profile</label>
+              <input id="dashEditSocialTwitter" type="text" class="form-control" placeholder="https://x.com/...">
+            </div>
+            <div>
+              <label class="form-label">📘 Facebook Page</label>
+              <input id="dashEditSocialFacebook" type="text" class="form-control" placeholder="https://facebook.com/...">
+            </div>
+            <div>
+              <label class="form-label">📸 Instagram / YouTube</label>
+              <input id="dashEditSocialInstagram" type="text" class="form-control" placeholder="https://instagram.com/...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Pitch & Battlecard -->
+        <div id="dashTabContentPitch" class="edit-tab-content" style="display: none;">
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label">🗣️ 30-Second Elevator Pitch Hook</label>
+            <textarea id="dashEditPitchHook" class="form-control" rows="3" placeholder="SDR opening script..."></textarea>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label">🎯 Big Binary Tech Strategic Angle</label>
+            <textarea id="dashEditPitchAngle" class="form-control" rows="2" placeholder="Why Big Binary Tech is the exact partner for them..."></textarea>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label">🚨 Operational Friction & Pain Points (1 per line)</label>
+            <textarea id="dashEditPitchPainPoints" class="form-control" rows="3" placeholder="Enter pain points, one per line..."></textarea>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label">🛡️ Objection Handlers (Key: Value or Notes)</label>
+            <textarea id="dashEditPitchObjections" class="form-control" rows="3" placeholder="Notes or custom scripts..."></textarea>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem; margin-top: 1rem;">
+          <button type="button" onclick="closeDashboardEditModal()" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
