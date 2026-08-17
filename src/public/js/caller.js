@@ -85,7 +85,7 @@ function renderActiveLead() {
     lead.industry || 'Industry',
     lead.location || 'Metro',
     `Team: ${lead.employee_size || '11-50'}`,
-    `⭐ ${lead.rating || '4.5'} (${lead.reviews_count || 0} reviews)`,
+    lead.rating ? (lead.reviews_count && lead.reviews_count > 0 ? `⭐ ${lead.rating} (${lead.reviews_count} reviews)` : `⭐ ${lead.rating} (Star Rating)`) : null,
     lead.email ? `✉ ${lead.email}` : null
   ].filter(Boolean);
   document.getElementById('callCompanyMeta').textContent = callerMetaParts.join(' • ');

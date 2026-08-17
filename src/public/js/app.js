@@ -107,7 +107,7 @@ function renderLeadsTable(leads = allLeads) {
     if (lead.call_status === 'Callback Requested') statusColor = '#fbbf24';
 
     const ratingDisplay = lead.rating
-      ? `⭐ ${lead.rating} (${lead.reviews_count || 0} revs)`
+      ? (lead.reviews_count && lead.reviews_count > 0 ? `⭐ ${lead.rating} (${lead.reviews_count} revs)` : `⭐ ${lead.rating} (Star Rating)`)
       : `${lead.employee_size || '11-50'} staff`;
 
     return `
