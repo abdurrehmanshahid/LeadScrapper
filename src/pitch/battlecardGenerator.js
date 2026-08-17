@@ -1,7 +1,6 @@
 /**
- * Dynamic Battlecard Generator for Big Binary Tech.
- * Problem points, opener, offer, and objections are all driven by the
- * actual audit signals on the lead — no two leads should read identically.
+ * Dynamic Consultative Battlecard & Diagnostic Advisory Generator for Big Binary Tech.
+ * Converts technical audit signals into authoritative, high-converting SDR advisory scripts.
  */
 
 function generateBattlecard(lead) {
@@ -25,7 +24,6 @@ function generateBattlecard(lead) {
   const latestNews = intel.news?.latest_headline || null;
   const bbbYears = intel.bbb?.years_in_business || null;
   const corpDate = intel.corporation?.incorporation_date || null;
-  const openJobs = intel.hiring?.jobs_found || [];
   const yearsInBusiness = bbbYears || (corpDate ? `${currentYear - parseInt(corpDate)} years` : null);
 
   const problemPoints = [];
@@ -33,236 +31,182 @@ function generateBattlecard(lead) {
   let targetOffer = '';
   const objections = [];
 
-  // ─── BPO RESCUE (existing Odoo users) ─────────────────────────────────────
+  // Financial Leak & Vulnerability Calculations
+  let financialLeakAnnual = '$45,000 – $80,000 / year';
+  let vulnerabilityScore = 65;
+  const vulnerabilityFlags = [];
+
+  if (employeeSize === '51-200') {
+    financialLeakAnnual = '$120,000 – $240,000 / year';
+    vulnerabilityScore += 15;
+  } else if (employeeSize === '201-500') {
+    financialLeakAnnual = '$350,000+ / year';
+    vulnerabilityScore += 25;
+  }
+
+  // ─── BPO RESCUE (Existing Odoo Implementations) ───────────────────────────
   if (category === 'BPO_RESCUE') {
     const isLegacy = f.isLegacyOdoo ||
       ['v12', 'v13', 'v14', 'v15'].some(v => techStack.toLowerCase().includes(v));
 
-    // Problem 1: Version-specific risk
     if (isLegacy) {
+      vulnerabilityScore += 20;
+      vulnerabilityFlags.push('🚨 Critical ERP Debt: Running End-of-Life Odoo version (v12–v15)');
       problemPoints.push(
-        `Running a legacy Odoo version (${techStack || 'v12–v15'}) — exposed to security vulnerabilities and incompatible with the v17/v18 app ecosystem.`
+        `Running a legacy Odoo version (${techStack || 'v12–v15'}) — exposed to unpatched security vulnerabilities and incompatible with modern Odoo v18 apps.`
       );
     } else {
+      vulnerabilityFlags.push('⚠️ Support SLA & Custom Module Debt: Escalating maintenance costs');
       problemPoints.push(
-        `Active Odoo deployment detected (${techStack || 'current version'}) — growing module debt and undocumented customizations are a common long-term liability.`
+        `Active Odoo deployment (${techStack || 'current version'}) — growing module debt and undocumented customizations risk crippling daily operations.`
       );
     }
 
-    // Problem 2: Support cost reality
     problemPoints.push(
-      `Regional Odoo partners typically charge $150–$250/hr with multi-week SLAs. A single bad module deploy or data migration issue can stall operations for days.`
+      `Regional Odoo partners typically charge $150–$250/hr with multi-week ticket response times. A single module conflict can halt warehouse dispatch or payroll for days.`
     );
 
-    // Problem 3: Scale-specific pain
     if (employeeSize === '51-200') {
       problemPoints.push(
-        `At ${employeeSize} employees, Odoo system downtime can cost $5K–$12K/day in lost throughput — without 24/7 monitoring that risk is entirely unmitigated.`
+        `At ${employeeSize} employees, system downtime costs an estimated $6,000–$14,000/day in stalled team output.`
       );
     } else {
       problemPoints.push(
-        `At ${employeeSize} employees, dedicated internal Odoo expertise is expensive to maintain. Most companies this size are either understaffed on Odoo or over-reliant on a single consultant.`
+        `At ${employeeSize} employees, maintaining in-house Odoo developers is cost-prohibitive. Most firms are vulnerable to single-person dependency risk.`
       );
     }
 
-    // Problem 4 (intel): Hiring signals reveal operational strain
     if (hiringSignals.length > 0) {
       problemPoints.push(
-        `Live hiring data signals: ${hiringSignals[0].toLowerCase()} — a common indicator that manual Odoo workflows are creating bottlenecks that headcount alone won't solve.`
+        `Hiring signal detected: ${hiringSignals[0]} — indicating internal team strain trying to bridge manual Odoo workflow gaps.`
       );
     }
 
-    // Offer — varies by version situation
-    if (isLegacy) {
-      targetOffer = `Priority v17/v18 Migration + 24/7 BPO Support: full module audit, zero-downtime upgrade path, and ongoing SLA maintenance at 50% below standard partner rates.`;
-    } else {
-      targetOffer = `Dedicated Odoo BPO & SLA Package: 24/7 ticket resolution, proactive module health monitoring, and custom n8n workflow automation at a fixed monthly cost.`;
-    }
+    targetOffer = isLegacy
+      ? `Priority v18 Modernization & 24/7 BPO SLA: complete module refactor, zero-downtime database upgrade, and ongoing maintenance at 50% below standard partner rates.`
+      : `Dedicated 24/7 Odoo BPO & SLA Package: guaranteed 15-minute critical ticket response, automated n8n workflow bridges, and fixed monthly support pricing.`;
 
-    // Opener — two variants based on legacy vs. current; inject news hook if available
-    const bpoNewsHook = latestNews ? ` I also saw the recent news about ${companyName} — congrats on the activity.` : '';
+    const bpoNewsHook = latestNews ? ` I noticed the recent company news on ${companyName} — congrats on the expansion.` : '';
     const bpoAgeNote = yearsInBusiness ? ` With ${yearsInBusiness} in the market, ` : ' ';
-    if (isLegacy) {
-      opener = `Hi, calling from Big Binary Tech — we specialize in Odoo support for operations teams.${bpoNewsHook} I noticed ${companyName} is running an older Odoo version and wanted to check in: are you getting the SLA coverage and upgrade roadmap you need from your current partner?${bpoAgeNote}we've migrated several companies your size to v18 with zero downtime and cut their monthly support bill in half. Worth a 5-minute conversation?`;
-    } else {
-      opener = `Hi, Big Binary Tech here.${bpoNewsHook} I noticed ${companyName} is running Odoo — great choice for a ${employeeSize}-person operation.${bpoAgeNote}we work with established companies that are happy with Odoo itself but frustrated with partner response times or escalating support costs. We offer 24/7 SLA-backed maintenance at around half the going rate. Is your current Odoo support giving you the coverage you actually need?`;
-    }
 
-    // Objections — pick based on legacy status
-    const bpoPool = [
+    // Authoritative Consultative Opener
+    opener = `Hi, calling from Big Binary Tech's technical advisory team.${bpoNewsHook} I was reviewing ${companyName}'s digital operations backend and noticed you're running Odoo${isLegacy ? ' on an older release' : ''}.${bpoAgeNote}We work with ${employeeSize}-person companies that love Odoo's core capabilities, but are frustrated by escalating partner hourly rates ($180+/hr) or slow response times when critical modules fail. We provide dedicated 24/7 SLA maintenance and upgrade roadmaps at half the going rate. How is your current Odoo support handling critical ticket turnaround?`;
+
+    objections.push(
       {
-        objection: '"We already have an Odoo partner."',
-        counter: '"That\'s common — most of our clients kept their partner for roadmap projects and brought us in for 24/7 overflow tickets at half the rate. Happy to send a one-page cost comparison?"'
+        objection: '"We already have an Odoo partner / developer."',
+        counter: '"That\'s completely normal — most of our clients kept their primary partner for big projects and brought us in for 24/7 emergency ticket overflow and routine health audits at half the cost. Would a 1-page comparison make sense?"'
       },
       {
-        objection: '"We built Odoo internally — no outside partner."',
-        counter: '"Internal teams are great for new features. We cover the part that\'s hard to staff internally: 24/7 on-call for outages, hotfixes, and monthly health audits — without replacing your team."'
+        objection: '"We built Odoo in-house — no outside help needed."',
+        counter: '"Internal engineers are best focused on core product features. We handle the heavy lifting: 24/7 on-call coverage, security patches, and database optimizations so your team isn\'t woken up by weekend crashes."'
       },
       {
-        objection: '"We\'re not planning to upgrade yet."',
-        counter: '"Totally fine — we can support your current version today and plan the upgrade on your schedule. The goal is making sure you\'re not stranded on an end-of-life version when a security patch drops."'
-      },
-      {
-        objection: '"We don\'t have budget for this right now."',
-        counter: '"That\'s exactly the conversation worth having. We typically reduce monthly Odoo maintenance spend by 40–50%. The switch often pays for itself in month one — can I email you a quick cost breakdown?"'
+        objection: '"We\'re not ready to upgrade yet."',
+        counter: '"Understood — we don\'t force sudden upgrades. We support your current version right now to stabilize performance, while mapping out a smooth zero-downtime migration on your timeline."'
       }
-    ];
+    );
 
-    objections.push(bpoPool[0]);
-    objections.push(isLegacy ? bpoPool[2] : bpoPool[3]);
-
-  // ─── NEW IMPLEMENTATION (no ERP detected) ──────────────────────────────────
+  // ─── NEW IMPLEMENTATIONS (No ERP / Legacy Stack) ──────────────────────────
   } else {
-
-    // Problem 1: Digital staleness — only add if meaningful
-    if (yearsOutdated >= 5) {
+    if (yearsOutdated >= 3) {
+      vulnerabilityScore += 15;
+      vulnerabilityFlags.push(`⚠️ Legacy Tech Stagnation: Website & backend unrefreshed since ${copyrightYear}`);
       problemPoints.push(
-        `Digital presence last refreshed in ${copyrightYear} — ${yearsOutdated} years without a platform update almost always means the back-office workflows behind it are equally dated.`
-      );
-    } else if (yearsOutdated >= 3) {
-      problemPoints.push(
-        `Website copyright stuck at ${copyrightYear} (${yearsOutdated} years ago) — a signal that client-facing tools and internal operations haven't been revisited since then either.`
+        `Digital presence last updated in ${copyrightYear} (${yearsOutdated} years ago) — client intake, dispatch, and billing are operating on disconnected legacy processes.`
       );
     }
 
-    // Problem 2: Tech-stack specific — what system are they actually on?
     if (f.hasLegacyCMS) {
-      const cmsName = techStack.split(',')[0] || 'Joomla/Drupal';
+      vulnerabilityScore += 15;
+      vulnerabilityFlags.push('⚠️ CMS Silo: CMS disconnected from accounting & field dispatch');
       problemPoints.push(
-        `Running on ${cmsName} — a CMS with no ERP integrations — meaning field jobs, inventory, and billing are tracked in separate spreadsheets with no single source of truth.`
+        `Running on a legacy CMS without ERP integrations — customer bookings, job scheduling, and invoicing are manually reconciled across Excel spreadsheets.`
       );
     } else if (f.hasWordPress) {
+      vulnerabilityScore += 10;
+      vulnerabilityFlags.push('⚠️ Disconnected WordPress Stack: No unified operations or CRM layer');
       problemPoints.push(
-        `WordPress site with no operations layer — customer requests, job scheduling, and invoicing are handled outside the website entirely, creating manual handoff friction at every step.`
-      );
-    } else if (f.noPortal) {
-      problemPoints.push(
-        `No integrated client portal or dispatch system detected — customers likely call or email to book service with no real-time job status or self-serve tracking available.`
+        `WordPress marketing site with no backend operations bridge — customer requests and job tracking require manual double-entry across multiple disconnected tools.`
       );
     }
 
-    // Problem 3: Performance / security — only when clearly problematic
     if (!hasSSL) {
+      vulnerabilityScore += 20;
+      vulnerabilityFlags.push('🚨 Security Risk: Unencrypted forms & missing SSL encryption');
       problemPoints.push(
-        `No SSL certificate — contact forms and booking submissions are sent in plain text. A credibility red flag for any B2B client doing due diligence before signing a contract.`
+        `Missing SSL certificate — client contact details and quote requests are submitted without encryption, posing credibility and data security risks.`
       );
     } else if (loadTime > 3.0) {
+      vulnerabilityScore += 10;
+      vulnerabilityFlags.push(`⚠️ Performance Latency: ${loadTime.toFixed(1)}s load time leaks inbound leads`);
       problemPoints.push(
-        `Site loads in ${loadTime.toFixed(1)}s — above the 3-second threshold where over half of mobile visitors leave. Active inbound leads are being lost before the first page renders.`
+        `Site load time of ${loadTime.toFixed(1)}s exceeds the 3-second abandonment limit — losing high-intent customer inquiries before pages render.`
       );
     }
 
-    // Problem 4: Revenue signal — reframe as scale constraint
-    if (reviewsCount >= 50) {
+    if (reviewsCount >= 40) {
       problemPoints.push(
-        `${reviewsCount} reviews at ${rating}★ confirms strong, recurring demand — but without automated dispatch and invoicing, every new job still requires manual coordination, which caps the volume the team can handle.`
-      );
-    } else if (reviewsCount >= 20) {
-      problemPoints.push(
-        `${reviewsCount} reviews at ${rating}★ shows established clientele. That volume of relationships is difficult to maintain manually — automated follow-up and a client portal would directly increase repeat bookings.`
+        `Strong client demand (${reviewsCount} reviews at ${rating}★) — but manual job dispatch and invoicing creates an administrative ceiling that limits monthly revenue scale.`
       );
     }
 
-    // Problem 5 (intel): Hiring signals are the strongest real-time pain indicator
-    if (hiringSignals.length > 0 && problemPoints.length < 4) {
-      problemPoints.push(
-        `Live job posting signal: ${hiringSignals[0]} — when headcount grows without automation, every new hire adds coordination overhead rather than capacity.`
-      );
-    }
-
-    // Cap at 4 — avoid wall-of-text
     while (problemPoints.length > 4) problemPoints.pop();
-
-    // If somehow nothing fired, add a minimal fallback
     if (problemPoints.length === 0) {
-      problemPoints.push(`No integrated ERP, CRM, or client portal detected — operations are likely managed through disconnected tools and manual processes.`);
+      problemPoints.push(`No unified ERP or automated client portal detected — operations rely on manual double-entry.`);
     }
 
-    // Offer — based on the dominant gap identified
-    if (f.hasLegacyCMS || f.hasWordPress) {
-      targetOffer = `Full Platform Migration: replace legacy CMS with Odoo (CRM + Projects + Field Dispatch + Invoicing) + n8n automation layer. Live in 30 days with zero operational downtime.`;
-    } else if (!hasSSL || loadTime > 3.0) {
-      targetOffer = `Operations & Infrastructure Overhaul: secure Odoo client portal, automated job-dispatch, and invoicing — built to convert web traffic into booked revenue.`;
-    } else {
-      targetOffer = `Odoo Business Operations Suite: integrated CRM, Project & Field Dispatch, and Invoicing + n8n automation to replace manual spreadsheets and disconnected tools.`;
-    }
+    targetOffer = `Full Business Operations Modernization: Unified Odoo ERP (CRM + Job Dispatch + Automated Invoicing + Client Portal) with automated n8n workflows. Live in 30 days with zero operational downtime.`;
 
-    // Industry detection
-    const isHealthcare = ['health', 'clinic', 'dental', 'medical', 'physio', 'optom'].some(k => industry.includes(k));
     const isContractor = ['roof', 'hvac', 'plumb', 'construct', 'field service', 'electric', 'solar', 'pest'].some(k => industry.includes(k));
+    const isHealthcare = ['health', 'clinic', 'dental', 'medical', 'physio', 'optom'].some(k => industry.includes(k));
     const isWholesale = ['wholesale', 'distribution', 'logistics', 'manufactur', 'supply'].some(k => industry.includes(k));
 
-    // Build intel hook sentences for opener personalisation
-    const newsHook = latestNews ? ` I actually came across some recent news on ${companyName} —` : '';
-    const hiringHook = hiringSignals.length > 0 ? ` I noticed you're currently ${hiringSignals[0].toLowerCase()},` : '';
-    const ageCredential = yearsInBusiness ? ` For a company with ${yearsInBusiness} of track record,` : '';
+    const newsHook = latestNews ? ` I noticed ${companyName}'s recent company announcement — congrats on the growth.` : '';
+    const hiringHook = hiringSignals.length > 0 ? ` I saw that you're currently ${hiringSignals[0].toLowerCase()},` : '';
+    const ageCredential = yearsInBusiness ? ` For a business with ${yearsInBusiness} in the community,` : '';
 
-    // Opener — industry-specific variant enriched with live intel
-    if (isHealthcare) {
-      opener = `Hi, calling from Big Binary Tech.${newsHook}${hiringHook} we noticed ${companyName} has a solid patient base${reviewsCount > 0 ? ` — ${reviewsCount} reviews at ${rating}★` : ''}, but your practice management tools haven't been updated in a few years. We help clinics and medical offices replace disconnected scheduling, billing, and patient comms with a single integrated Odoo environment. Are manual scheduling gaps or billing delays costing your staff time right now?`;
-    } else if (isContractor) {
-      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} we work with ${industry} companies to automate job dispatch, quoting, and client follow-up. I noticed ${companyName} has${reviewsCount > 0 ? ` ${reviewsCount} reviews and` : ''} a strong local reputation.${ageCredential} your operations backend likely still runs on spreadsheets or disconnected apps. We can have an integrated Odoo field-ops setup live in under 30 days — do you have 2 minutes to hear how we cut admin time for contractors by 60%?`;
+    if (isContractor) {
+      opener = `Hi, calling from Big Binary Tech's operations team.${newsHook}${hiringHook} We work with established ${industry} contractors to eliminate manual job dispatch and billing bottlenecks.${ageCredential} Our technical audit showed that while your client reputation is strong${reviewsCount > 0 ? ` (${reviewsCount} reviews)` : ''}, your backend likely still relies on disconnected spreadsheets or separate invoicing apps. We build unified Odoo systems that cut contractor admin hours by 60% and get invoices paid twice as fast. Do you have 2 minutes to hear the 3 friction points we identified?`;
+    } else if (isHealthcare) {
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing medical and specialty clinics replace fragmented patient booking, intake, and invoicing with a single HIPAA-aligned Odoo platform.${ageCredential} Are manual scheduling handoffs or billing reconciliation delays costing your admin staff hours each week?`;
     } else if (isWholesale) {
-      opener = `Hi, calling from Big Binary Tech.${newsHook}${hiringHook} we specialize in Odoo ERP for wholesale and distribution operations.${ageCredential} I noticed ${companyName} doesn't appear to have an integrated inventory and order management system — most companies your size are still reconciling orders in Excel at month-end. We connect purchasing, inventory, and invoicing into one Odoo environment. Is that a pain point for your ops team?`;
+      opener = `Hi, calling from Big Binary Tech.${newsHook}${hiringHook} We specialize in Odoo ERP for wholesale and distribution operations.${ageCredential} We noticed ${companyName} doesn't have an automated real-time inventory and purchase order bridge — meaning teams are reconciling Excel at month-end. We connect inventory, purchasing, and invoicing into one live system. Is that an operational pain point for your team?`;
     } else {
-      opener = `Hi, I noticed ${companyName} has built a solid reputation in ${industry}${reviewsCount > 0 ? ` with ${reviewsCount} reviews at ${rating}★` : ''}.${newsHook}${hiringHook}${ageCredential} at Big Binary Tech we help established businesses replace manual workflows with an all-in-one Odoo system and n8n automation. Do you have 2 minutes to hear how we streamline client intake and job tracking?`;
+      opener = `Hi, this is Big Binary Tech's technical advisory group.${newsHook}${hiringHook} We recently ran a digital operations audit on established ${industry} firms in your area.${ageCredential} We identified two specific friction points in your client intake and dispatch flow that usually cause duplicate data entry and delayed invoicing. I'm not calling to sell generic software — I wanted to share the 2-minute diagnostic findings. Worth a brief conversation?`;
     }
 
-    // Objections — industry-aware pools
-    const healthcareObjections = [
+    objections.push(
       {
-        objection: '"We already use a medical billing system."',
-        counter: '"Odoo doesn\'t replace your billing system — it integrates with it and adds the scheduling, patient comms, and practice management layer your team is likely missing."'
+        objection: '"We use QuickBooks / spreadsheets and it works fine."',
+        counter: '"QuickBooks is great for bookkeeping, but it doesn\'t track live field jobs, automate customer follow-up, or prevent double-entry. Odoo bridges directly into QuickBooks or replaces the manual work entirely."'
       },
       {
-        objection: '"We\'re too busy to implement new software."',
-        counter: '"We hear that constantly from busy practices — that\'s why we handle the full migration while you stay operational. Most clinics see a productivity lift within two weeks of go-live."'
-      }
-    ];
-
-    const contractorObjections = [
-      {
-        objection: '"We use QuickBooks and it works fine."',
-        counter: '"QuickBooks is great for year-end taxes, but it doesn\'t dispatch field teams, track live job progress, or send automated client updates. Odoo handles everything QuickBooks can\'t."'
+        objection: '"We\'re too busy to change software right now."',
+        counter: '"That\'s exactly why we designed our 30-day turnkey rollout — we handle 100% of the data migration and setup in the background so your day-to-day work never skips a beat."'
       },
       {
-        objection: '"We\'re too slammed to switch systems right now."',
-        counter: '"That\'s exactly what every top contractor tells us — and why we do 100% of the data migration for you with zero downtime. No lost jobs, no retraining headaches during busy season."'
+        objection: '"We don\'t have budget for a big IT project."',
+        counter: '"Odoo typically replaces 3 to 4 separate software subscriptions you\'re already paying for. Most clients see the system pay for itself in the first 60 days from admin labor savings alone."'
       }
-    ];
-
-    const wholesaleObjections = [
-      {
-        objection: '"We have a custom system built for us."',
-        counter: '"Custom systems often lack real-time inventory sync and automated PO workflows. Odoo can integrate with it or replace it at a fraction of what you pay to maintain custom code."'
-      },
-      {
-        objection: '"An ERP is too expensive for us right now."',
-        counter: '"Odoo\'s total cost is typically 70% lower than SAP or NetSuite, and we do phased rollouts — start with just inventory + invoicing and expand from there. What does manual reconciliation cost you in staff hours each month?"'
-      }
-    ];
-
-    const genericObjections = [
-      {
-        objection: '"We\'re not looking for new software right now."',
-        counter: '"Totally fair — most companies we work with weren\'t either, until we showed them a 15-minute demo of how much time their team wastes on manual steps. Worth 15 minutes to find out?"'
-      },
-      {
-        objection: '"We don\'t have the budget."',
-        counter: '"Odoo typically replaces 3–4 separate tools your team already pays for. Can I send you a quick cost comparison so you can see whether it actually saves money net of implementation?"'
-      }
-    ];
-
-    if (isHealthcare) {
-      objections.push(...healthcareObjections);
-    } else if (isContractor) {
-      objections.push(...contractorObjections);
-    } else if (isWholesale) {
-      objections.push(...wholesaleObjections);
-    } else {
-      objections.push(...genericObjections);
-    }
+    );
   }
+
+  // Diagnostic 3-Step Action Plan (For Authoritative Advisory Pitching)
+  const advisory3StepPlan = [
+    {
+      step: '1. Technical Diagnostic Audit',
+      action: 'Run a 360° deep scan on database health, API latency, and customer intake forms to locate where leads and invoices drop.'
+    },
+    {
+      step: '2. Automated Workflow Bridge',
+      action: 'Deploy n8n webhook automation to bridge CRM, job dispatch, and accounting with zero manual double-entry.'
+    },
+    {
+      step: '3. Phased Zero-Downtime Deployment',
+      action: 'Migrate active customer records and history to unified Odoo v18 with full staff onboarding and guaranteed zero business disruption.'
+    }
+  ];
 
   return {
     problem_analysis: problemPoints,
@@ -270,7 +214,12 @@ function generateBattlecard(lead) {
     elevator_opener: opener,
     objection_handlers: objections,
     review_dossier: lead.review_dossier || null,
-    case_study_fit: lead.case_study_fit || null
+    case_study_fit: lead.case_study_fit || null,
+    // New Consultative Advisory Fields
+    vulnerability_score: Math.min(98, Math.max(30, vulnerabilityScore)),
+    vulnerability_flags: vulnerabilityFlags,
+    estimated_financial_leak: financialLeakAnnual,
+    advisory_3step_plan: advisory3StepPlan
   };
 }
 

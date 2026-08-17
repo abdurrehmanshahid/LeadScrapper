@@ -173,8 +173,63 @@ function renderActiveLead() {
     dossierSection.style.display = 'none';
   }
 
-  // Problem Analysis
+  // Consultative Technical Diagnostic & Advisory Box
+  const advisorySection = document.getElementById('callAdvisorySection');
   const bc = lead.battlecard || {};
+
+  if (advisorySection) {
+    advisorySection.style.display = 'block';
+    const fragilityScore = bc.vulnerability_score || (lead.category === 'BPO_RESCUE' ? 82 : 74);
+    const fragilityBadge = document.getElementById('callFragilityBadge');
+    if (fragilityBadge) {
+      fragilityBadge.textContent = `🚨 ${fragilityScore}% Fragility Risk`;
+      if (fragilityScore >= 80) {
+        fragilityBadge.style.background = 'rgba(239,68,68,0.25)';
+        fragilityBadge.style.color = '#f87171';
+      } else {
+        fragilityBadge.style.background = 'rgba(245,158,11,0.2)';
+        fragilityBadge.style.color = '#fbbf24';
+      }
+    }
+
+    const leakBadge = document.getElementById('callLeakBadge');
+    if (leakBadge) {
+      leakBadge.textContent = `💸 Leak: ${bc.estimated_financial_leak || '$45K-$80K/yr'}`;
+    }
+
+    const flagsContainer = document.getElementById('callVulnerabilityFlags');
+    if (flagsContainer) {
+      const flags = bc.vulnerability_flags && bc.vulnerability_flags.length > 0
+        ? bc.vulnerability_flags
+        : [
+            lead.category === 'BPO_RESCUE'
+              ? '🚨 ERP Support Debt: Escalating partner hourly costs & slow SLA resolution'
+              : '⚠️ Disconnected Workflow Island: Intake, dispatch & billing operate in silos'
+          ];
+      flagsContainer.innerHTML = flags.map(f => `
+        <div style="font-size: 0.78rem; font-weight: 700; color: #fecaca; display: flex; align-items: center; gap: 6px;">
+          ${escapeHtml(f)}
+        </div>
+      `).join('');
+    }
+
+    const prescriptionContainer = document.getElementById('call3StepPrescription');
+    if (prescriptionContainer) {
+      const steps = bc.advisory_3step_plan || [
+        { step: '1. Technical Diagnostic', action: 'Scan database health, API latency & intake forms to locate churn bottlenecks.' },
+        { step: '2. Workflow Automation Bridge', action: 'Deploy n8n webhooks to automate CRM, dispatch & billing with 0 double-entry.' },
+        { step: '3. Zero-Downtime Migration', action: 'Migrate to unified Odoo v18 with full staff onboarding and 0 disruption.' }
+      ];
+      prescriptionContainer.innerHTML = steps.map(s => `
+        <div>
+          <span style="font-weight: 800; color: #a5b4fc;">${escapeHtml(s.step)}:</span>
+          <span style="color: #cbd5e1; margin-left: 4px;">${escapeHtml(s.action)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Problem Analysis
   const problemList = document.getElementById('callProblemList');
   const problems = bc.problem_analysis && bc.problem_analysis.length > 0
     ? bc.problem_analysis
