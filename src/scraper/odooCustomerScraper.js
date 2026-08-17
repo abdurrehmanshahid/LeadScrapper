@@ -111,7 +111,9 @@ async function scrapeOdooCustomers(region = 'North America', industry = 'All', m
             rawCards.push(pc);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        onProgress({ status: 'WARN', message: `Failed to extract Odoo page cards: ${e.message}` });
+      }
     }
 
     onProgress({ status: 'Found Odoo Clients', message: `Extracted ${rawCards.length} verified live Odoo client profiles.` });
@@ -219,8 +221,10 @@ const { companyName: cleanCompName, personName: embeddedPerson } = extractCompan
         }
       }
 
-      const domain = website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-      const email = (audit.emails_found && audit.emails_found[0]) || `operations@${domain}`;
+      const domain = website ? website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : '';
+      // Only synthesise a fallback email when we have a real domain (must have a dot — not an empty string)
+      const email = (audit.emails_found && audit.emails_found[0]) ||
+        (domain && domain.includes('.') ? `operations@${domain}` : '');
 
       // Build real stack array
       let finalTechStack = audit.tech_stack;
@@ -409,18 +413,27 @@ async function crossReferenceOnGoogle(companyName, country, page) {
       }
     }
 
-    // ── Fallback website: first organic result that isn't a social/directory site
+    // ── Fallback website: title-link of first organic result whose heading mentions the company
     if (!website) {
-      const skipDomains = ['google.com', 'linkedin.com', 'facebook.com', 'twitter.com', 'instagram.com', 'yelp.com', 'yellowpages.com', 'bbb.org', 'clutch.co', 'crunchbase.com', 'indeed.com'];
-      const links = Array.from(document.querySelectorAll('#search a[href^="http"]'));
-      for (const link of links) {
-        const href = link.getAttribute('href') || '';
+      const skipDomains = [
+        'google.com', 'linkedin.com', 'facebook.com', 'twitter.com', 'instagram.com',
+        'yelp.com', 'yellowpages.com', 'bbb.org', 'clutch.co', 'crunchbase.com',
+        'indeed.com', 'mapquest.com', 'chamberofcommerce.com', 'foursquare.com',
+        'zoominfo.com', 'dnb.com', 'hoovers.com', 'manta.com', 'bizapedia.com',
+        'opencorporates.com', 'bloomberg.com', 'dun.com', 'apollo.io'
+      ];
+      // Only look at organic result blocks, not all links on the page
+      const blocks = Array.from(document.querySelectorAll('#search .g, #rso .g'));
+      for (const block of blocks) {
+        const titleEl = block.querySelector('h3');
+        const linkEl = block.querySelector('a[href^="http"]');
+        if (!titleEl || !linkEl) continue;
+        const href = linkEl.getAttribute('href') || '';
         try {
           const url = new URL(href);
-          if (!skipDomains.some(d => url.hostname.includes(d))) {
-            website = url.origin;
-            break;
-          }
+          if (skipDomains.some(d => url.hostname.includes(d))) continue;
+          website = url.origin;
+          break;
         } catch (_) {}
       }
     }

@@ -205,7 +205,14 @@ class Database {
     };
 
     if (this._mongo) {
-      await this._Lead.findOneAndUpdate({ id }, { $set: lead });
+      await this._Lead.findOneAndUpdate({ id }, {
+        $set: {
+          call_status:    lead.call_status,
+          notes:          lead.notes,
+          last_called_at: lead.last_called_at,
+          updated_at:     lead.updated_at
+        }
+      });
       await new this._CallLog(logEntry).save();
     } else {
       const idx = this._leads.findIndex(l => l.id === id);

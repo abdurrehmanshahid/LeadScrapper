@@ -3,6 +3,8 @@
  * Converts technical audit signals into authoritative, high-converting SDR advisory scripts.
  */
 
+const _negativeNews = /\b(lawsuit|sued|layoff|laid off|cut|fire|downsize|bankrupt|breach|hack|fine|penalty|investigation|complaint|loss|drop|fall|decline|crisis|probe)\b/i;
+
 function generateBattlecard(lead) {
   const currentYear = new Date().getFullYear();
   const companyName = lead.name || 'your company';
@@ -43,6 +45,9 @@ function generateBattlecard(lead) {
     financialLeakAnnual = '$350,000+ / year';
     vulnerabilityScore += 25;
   }
+
+  // Detects negative news so we don't congratulate a prospect on a lawsuit
+  const _negativeNews = /lawsuit|layoff|bankrupt|recall|fraud|scandal|fine|penalt|arrest|shut.?down|investigat|indictment|clos(ed|ing|ure)|breach/i;
 
   // ─── BPO RESCUE (Existing Odoo Implementations) ───────────────────────────
   if (category === 'BPO_RESCUE') {
@@ -86,7 +91,11 @@ function generateBattlecard(lead) {
       ? `Priority v18 Modernization & 24/7 BPO SLA: complete module refactor, zero-downtime database upgrade, and ongoing maintenance at 50% below standard partner rates.`
       : `Dedicated 24/7 Odoo BPO & SLA Package: guaranteed 15-minute critical ticket response, automated n8n workflow bridges, and fixed monthly support pricing.`;
 
-    const bpoNewsHook = latestNews ? ` I noticed the recent company news on ${companyName} — congrats on the expansion.` : '';
+    const bpoNewsHook = latestNews
+      ? _negativeNews.test(latestNews)
+        ? ` I've been following some of the recent developments around ${companyName}.`
+        : ` I noticed the recent company news on ${companyName} — congrats on the expansion.`
+      : '';
     const bpoAgeNote = yearsInBusiness ? ` With ${yearsInBusiness} in the market, ` : ' ';
 
     // Authoritative Consultative Opener
@@ -162,7 +171,11 @@ function generateBattlecard(lead) {
     const isHealthcare = ['health', 'clinic', 'dental', 'medical', 'physio', 'optom'].some(k => industry.includes(k));
     const isWholesale = ['wholesale', 'distribution', 'logistics', 'manufactur', 'supply'].some(k => industry.includes(k));
 
-    const newsHook = latestNews ? ` I noticed ${companyName}'s recent company announcement — congrats on the growth.` : '';
+    const newsHook = latestNews
+      ? _negativeNews.test(latestNews)
+        ? ` I've been following some of the recent news around ${companyName}.`
+        : ` I noticed ${companyName}'s recent company announcement — congrats on the growth.`
+      : '';
     const hiringHook = hiringSignals.length > 0 ? ` I saw that you're currently ${hiringSignals[0].toLowerCase()},` : '';
     const ageCredential = yearsInBusiness ? ` For a business with ${yearsInBusiness} in the community,` : '';
 

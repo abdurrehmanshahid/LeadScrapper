@@ -78,16 +78,20 @@ app.patch('/api/leads/:id', async (req, res) => {
 
 // 4b. AI Auto-Enrichment — intelligently research and enrich contact details & decision makers
 app.post('/api/leads/:id/ai-enrich', async (req, res) => {
+  let browser = null;
   try {
     const lead = await db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
     const { findDecisionMakers } = require('../auditor/decisionMakerFinder');
     const { classifyIndustry } = require('../utils/industryClassifier');
+    const { launchBrowser } = require('../scraper/browserHelper');
 
     const domain = lead.website ? lead.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : null;
-    const dms = await findDecisionMakers(lead.name, lead.website, domain);
-    
+
+    browser = await launchBrowser();
+    const dms = await findDecisionMakers(lead.name, lead.website, domain, browser);
+
     const mergedDMs = [...(lead.decision_makers || [])];
     for (const dm of dms) {
       if (!mergedDMs.some(m => m.name.toLowerCase() === dm.name.toLowerCase())) {
@@ -96,15 +100,14 @@ app.post('/api/leads/:id/ai-enrich', async (req, res) => {
     }
 
     const industry = classifyIndustry(lead.name, lead.notes || '', lead.industry);
-    const patch = {
-      decision_makers: mergedDMs,
-      industry: industry
-    };
+    const patch = { decision_makers: mergedDMs, industry };
 
     const updated = await db.updateLeadFields(req.params.id, patch);
     res.json({ success: true, lead: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  } finally {
+    if (browser) try { await browser.close(); } catch (_) {}
   }
 });
 

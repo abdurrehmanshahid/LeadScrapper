@@ -94,14 +94,13 @@ function renderActiveLead() {
   const isMissingPhone = !phone || phone === '(555) 000-0000';
   document.getElementById('callPhoneNumber').innerHTML = isMissingPhone
     ? `<span style="color: #64748b; font-size: 0.9rem;">No phone found</span>
-       <button onclick="document.getElementById('callEditPhoneRow').style.display='block'; document.getElementById('editPhoneInput').focus();"
+       <button onclick="editCurrentPhone()"
          style="background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.4); color: #fbbf24; border-radius: 6px; padding: 0.18rem 0.55rem; font-size: 0.72rem; cursor: pointer; font-weight: 700; margin-left: 8px;">
          ✏️ Add Phone
        </button>`
-    : `<a href="tel:${phone.replace(/[^0-9+]/g, '')}" style="color: #818cf8; text-decoration: none;" title="Click to Dial">${escapeHtml(phone)}</a>
-       <button onclick="navigator.clipboard.writeText('${phone}'); showToast('📋 Phone copied!');" style="background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); margin-left: 6px;" title="Copy">📋</button>
-       <button onclick="document.getElementById('callEditPhoneRow').style.display='block'; document.getElementById('editPhoneInput').value='${phone}'; document.getElementById('editPhoneInput').focus();"
-         style="background: none; border: none; cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-left: 2px;" title="Edit phone">✏️</button>`;
+    : `<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ''))}" style="color: #818cf8; text-decoration: none;" title="Click to Dial">${escapeHtml(phone)}</a>
+       <button onclick="copyCurrentPhone()" style="background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); margin-left: 6px;" title="Copy">📋</button>
+       <button onclick="editCurrentPhone()" style="background: none; border: none; cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-left: 2px;" title="Edit phone">✏️</button>`;
 
   // Reset edit phone row
   const editPhoneRow = document.getElementById('callEditPhoneRow');
@@ -260,6 +259,27 @@ function renderActiveLead() {
 
   document.getElementById('callNotesInput').value = lead.notes || '';
 }
+
+window.copyCurrentPhone = function() {
+  const lead = callerLeads[currentIndex];
+  if (lead && lead.phone) {
+    navigator.clipboard.writeText(lead.phone);
+    showToast('📋 Phone copied!');
+  }
+};
+
+window.editCurrentPhone = function() {
+  const lead = callerLeads[currentIndex];
+  const editPhoneRow = document.getElementById('callEditPhoneRow');
+  if (editPhoneRow) {
+    editPhoneRow.style.display = 'block';
+    const input = document.getElementById('editPhoneInput');
+    if (input) {
+      input.value = (lead && lead.phone && lead.phone !== '(555) 000-0000') ? lead.phone : '';
+      input.focus();
+    }
+  }
+};
 
 function showToast(message, isSuccess = true) {
   let toast = document.getElementById('callerToast');

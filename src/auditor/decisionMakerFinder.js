@@ -96,13 +96,31 @@ function matchPersona(titleStr) {
 }
 
 async function findDecisionMakers(companyName, website, emailDomain, browser) {
+  // Create the page here so the timeout can close it, aborting any in-flight
+  // navigation inside runDiscovery instead of leaking an open page per lead.
+  let dmPage = null;
+  if (browser) {
+    try {
+      dmPage = await browser.newPage();
+      await dmPage.setViewport({ width: 1000, height: 700 });
+      await dmPage.setRequestInterception(true);
+      dmPage.on('request', req => {
+        if (['image', 'media', 'font', 'stylesheet'].includes(req.resourceType())) req.abort();
+        else req.continue();
+      });
+    } catch (_) { dmPage = null; }
+  }
+
   return Promise.race([
-    runDiscovery(companyName, website, emailDomain, browser),
-    new Promise(resolve => setTimeout(() => resolve([]), 6000))
+    runDiscovery(companyName, website, emailDomain, dmPage),
+    new Promise(resolve => setTimeout(() => {
+      if (dmPage) dmPage.close().catch(() => {});
+      resolve([]);
+    }, 6000))
   ]);
 }
 
-async function runDiscovery(companyName, website, emailDomain, browser) {
+async function runDiscovery(companyName, website, emailDomain, page) {
   const results = [];
   const seenNames = new Set();
 
@@ -126,22 +144,8 @@ async function runDiscovery(companyName, website, emailDomain, browser) {
     }
   }
 
-  let page = null;
   try {
-    if (browser) {
-      page = await browser.newPage();
-      await page.setViewport({ width: 1000, height: 700 });
-      
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        const resource = req.resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(resource)) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-
+    if (page) {
       try {
         const searchDMs = await searchPublicLeadership(targetSearchName, page);
         for (const dm of searchDMs) {
@@ -164,8 +168,8 @@ async function runDiscovery(companyName, website, emailDomain, browser) {
         } catch (_) {}
       }
     }
-  } catch (err) {
-    // Best effort
+  } catch (_) {
+    // Best effort — page may have been closed by the outer timeout
   } finally {
     if (page) {
       try { await page.close(); } catch (_) {}
@@ -221,7 +225,7 @@ async function searchPublicLeadership(companyName, page) {
           const snippetText = (snippet ? snippet.innerText : '').trim();
           const href = h2.getAttribute('href') || '';
 
-          const liMatch = titleText.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*[-–—|:]\s*(.+)/);
+          const liMatch = titleText.match(/^([A-ZÀ-ÖØ-öø-ÿ][a-zA-ZÀ-ÿ'\-]+(?:\s+[A-ZÀ-ÖØ-öø-ÿ][a-zA-ZÀ-ÿ'\-]+){1,3})\s*[-–—|:]\s*(.+)/);
           if (liMatch) {
             const potentialName = liMatch[1].trim();
             let role = liMatch[2].replace(/\s*[-–—|]\s*LinkedIn.*$/i, '').split(/[-–—|]/)[0].trim();

@@ -73,7 +73,7 @@ async function fetchLeads() {
   }
 }
 
-function renderLeadsTable(leads) {
+function renderLeadsTable(leads = allLeads) {
   const tbody = document.getElementById('leadsTableBody');
   if (!leads || leads.length === 0) {
     tbody.innerHTML = `
@@ -257,6 +257,7 @@ window.openLeadModal = function(id) {
 
 function closeModal() {
   document.getElementById('leadModal').style.display = 'none';
+  currentModalLeadId = null;
 }
 
 window.deleteLead = async function(id) {
@@ -651,7 +652,7 @@ window.saveDashboardCompanyEdits = async function() {
     if (idx >= 0) allLeads[idx] = data.lead || { ...lead, ...payload };
 
     closeDashboardEditModal();
-    renderLeadsTable();
+    renderLeadsTable(allLeads);
     window.openLeadModal(lead.id);
   } catch (err) {
     console.error('Error saving company edits:', err);
@@ -668,6 +669,29 @@ window.triggerAISearch = async function() {
   } finally {
     if (btn) btn.textContent = '🔍 AI Search';
   }
+};
+
+window.mineNewFromSearch = function() {
+  const raw = document.getElementById('searchInput').value.trim();
+  if (!raw) { alert('Type a query first — e.g. "Commercial Roofing in Dallas TX"'); return; }
+
+  // Split "Industry in Location" → populate both fields
+  // Matches: "roofing contractors in Dallas, TX" or "dental clinics near Houston"
+  const locationMatch = raw.match(/\s+(?:in|near|around)\s+(.+)$/i);
+  let keyword = raw;
+  let location = document.getElementById('gmapsLocation').value || '';
+
+  if (locationMatch) {
+    keyword  = raw.slice(0, raw.length - locationMatch[0].length).trim();
+    location = locationMatch[1].trim();
+  }
+
+  document.getElementById('gmapsQuery').value    = keyword;
+  document.getElementById('gmapsLocation').value = location;
+
+  // Scroll to the pipeline and fire the scrape
+  document.getElementById('gmapsForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => document.getElementById('gmapsForm').requestSubmit(), 400);
 };
 
 window.clearSearch = function() {
@@ -695,7 +719,7 @@ window.runLeadAiEnrich = async function() {
     if (idx >= 0) allLeads[idx] = data.lead;
 
     window.openLeadModal(currentModalLeadId);
-    renderLeadsTable();
+    renderLeadsTable(allLeads);
     alert(`✨ Successfully enriched "${data.lead.name}" with verified intelligence!`);
   } catch (err) {
     alert(`AI Enrichment error: ${err.message}`);

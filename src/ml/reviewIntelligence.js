@@ -150,7 +150,8 @@ function generateReviewDossier(lead, nliResult) {
 
   // ── Part 1: Who they are (volume + age, most specific data first) ──────────
   const effectiveRating = yelpRating || googleRating;
-  const effectiveCount  = yelpCount  || googleCount;
+  // Strip commas before coercing ("1,500" → 1500) — Yelp JSON-LD uses comma-formatted counts
+  const effectiveCount = parseInt(String(yelpCount || googleCount || 0).replace(/,/g, ''), 10) || 0;
   const ratingSrc = yelpRating ? 'Yelp' : 'Google';
   const ageNote = bbbYears
     ? `${bbbYears} in the market`
