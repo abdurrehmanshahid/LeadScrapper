@@ -18,8 +18,10 @@
         <span class="sub-title">Lead Intelligence & ML Propensity Engine</span>
       </div>
     </div>
-    <div class="nav-actions">
+    <div class="nav-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
       <a href="caller.html" class="btn btn-accent">📞 Open SDR Caller View</a>
+      <button id="batchClayBtn" onclick="pushTopTierLeadsToClay()" class="btn btn-secondary" style="color: #60a5fa; border-color: rgba(96,165,250,0.4); font-weight: 700;" title="Dispatches Top Tier (≥85%) Leads to Clay Waterfall">🧊 Push Tier-1 to Clay</button>
+      <button id="claySettingsBtn" onclick="openClayConfigModal()" class="btn btn-secondary btn-sm" title="Configure Clay Webhook">⚙️ Clay Setup</button>
       <button id="exportCsvBtn" class="btn btn-secondary">📥 Export CSV</button>
       <button id="clearLeadsBtn" class="btn btn-secondary btn-sm" style="color: #fb7185;">🗑️ Clear Data</button>
     </div>
@@ -210,6 +212,7 @@
           <div id="modalMeta" style="font-size: 0.825rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button id="modalClayPushBtn" onclick="pushCurrentLeadToClay()" class="btn btn-secondary btn-sm" style="color: #60a5fa; border-color: rgba(96,165,250,0.4); font-weight: 700;">🧊 Push to Clay</button>
           <button id="modalAiEnrichBtn" onclick="runLeadAiEnrich()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4); font-weight: 700;">✨ AI Auto-Enrich</button>
           <button onclick="openDashboardEditModal()" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56,189,248,0.4); font-weight: 700;">✏️ Edit Details & Pitch</button>
           <button id="closeModalBtn" class="btn btn-secondary btn-sm">✕ Close</button>
@@ -404,6 +407,39 @@
           <button type="submit" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Changes</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Clay Integration Setup Modal -->
+  <div id="clayConfigModal" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1200; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal-content" style="max-width: 600px; width: 95%; background: #0c1427; border: 1px solid rgba(96,165,250,0.3); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+        <div>
+          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+            🧊 Clay.com Automated Integration Setup
+          </h3>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Configure your Clay Inbound Webhook for 1-click waterfall enrichment</span>
+        </div>
+        <button onclick="closeClayConfigModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
+      </div>
+
+      <div style="background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.25); border-radius: 8px; padding: 0.85rem 1rem; font-size: 0.825rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 1.25rem;">
+        <strong>How to get your Clay Webhook URL:</strong><br>
+        1. Open your <strong>Clay.com</strong> workspace & create a table.<br>
+        2. Click <strong>Import Data</strong> → <strong>Webhook</strong>.<br>
+        3. Copy the <strong>Inbound Webhook URL</strong> and paste it below.<br>
+        4. When you push leads, Clay receives them automatically, finds the CEO cell phone & verified email, and posts them back!
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label class="form-label">Clay Inbound Webhook URL</label>
+        <input id="clayWebhookInput" type="url" class="form-control" placeholder="https://api.clay.com/v3/sources/webhook/..." style="font-size: 0.85rem;">
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem;">
+        <button type="button" onclick="closeClayConfigModal()" class="btn btn-secondary">Cancel</button>
+        <button type="button" onclick="saveClayConfig()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Configuration</button>
+      </div>
     </div>
   </div>
 

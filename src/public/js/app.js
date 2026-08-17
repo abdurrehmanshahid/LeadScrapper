@@ -704,3 +704,89 @@ window.runLeadAiEnrich = async function() {
     btn.disabled = false;
   }
 };
+
+// ─── Automated Clay Integration Handlers ─────────────────────────────────────
+
+window.openClayConfigModal = function() {
+  const savedUrl = localStorage.getItem('clay_webhook_url') || '';
+  document.getElementById('clayWebhookInput').value = savedUrl;
+  document.getElementById('clayConfigModal').style.display = 'flex';
+};
+
+window.closeClayConfigModal = function() {
+  document.getElementById('clayConfigModal').style.display = 'none';
+};
+
+window.saveClayConfig = function() {
+  const url = document.getElementById('clayWebhookInput').value.trim();
+  if (url && !url.startsWith('http')) {
+    alert('Please enter a valid URL (e.g. https://api.clay.com/v3/sources/webhook/...)');
+    return;
+  }
+  localStorage.setItem('clay_webhook_url', url);
+  closeClayConfigModal();
+  alert('✓ Clay Webhook configuration saved!');
+};
+
+window.pushCurrentLeadToClay = async function() {
+  if (!currentModalLeadId) return;
+  const webhookUrl = localStorage.getItem('clay_webhook_url');
+  if (!webhookUrl) {
+    alert('Please configure your Clay Webhook URL first via "⚙️ Clay Setup" in the top bar!');
+    openClayConfigModal();
+    return;
+  }
+
+  const btn = document.getElementById('modalClayPushBtn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '⏳ Pushing to Clay...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/leads/${currentModalLeadId}/clay-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: webhookUrl })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to push to Clay');
+
+    alert(`🧊 Dispatched lead to Clay! Clay is running waterfall enrichment and will update contacts automatically.`);
+  } catch (err) {
+    alert(`Clay Push Error: ${err.message}`);
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+};
+
+window.pushTopTierLeadsToClay = async function() {
+  const webhookUrl = localStorage.getItem('clay_webhook_url');
+  if (!webhookUrl) {
+    alert('Please configure your Clay Webhook URL first via "⚙️ Clay Setup" in the top bar!');
+    openClayConfigModal();
+    return;
+  }
+
+  const btn = document.getElementById('batchClayBtn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '⏳ Dispatching to Clay...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/leads/clay-batch-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: webhookUrl, min_score: 85, limit: 50 })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || data.message || 'Batch push failed');
+
+    alert(`🧊 ${data.message}`);
+  } catch (err) {
+    alert(`Clay Batch Error: ${err.message}`);
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+};

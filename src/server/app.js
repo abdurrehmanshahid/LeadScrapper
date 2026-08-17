@@ -108,6 +108,98 @@ app.post('/api/leads/:id/ai-enrich', async (req, res) => {
   }
 });
 
+// 4c. Push Lead to Clay Webhook for Waterfall Enrichment
+app.post('/api/leads/:id/clay-push', async (req, res) => {
+  try {
+    const { webhook_url } = req.body;
+    const webhookUrl = webhook_url || process.env.CLAY_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'Please provide your Clay Inbound Webhook URL' });
+    }
+
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { pushLeadToClay } = require('../auditor/clayIntegration');
+    const result = await pushLeadToClay(lead, webhookUrl);
+    res.json({ success: true, message: `Pushed "${lead.name}" to Clay for waterfall enrichment!`, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4d. Batch Push Top Tier Leads to Clay
+app.post('/api/leads/clay-batch-push', async (req, res) => {
+  try {
+    const { webhook_url, min_score = 85, limit = 50 } = req.body;
+    const webhookUrl = webhook_url || process.env.CLAY_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'Please provide your Clay Inbound Webhook URL' });
+    }
+
+    const leads = await db.getAllLeads();
+    const topLeads = leads
+      .filter(l => (l.success_chance_pct || 0) >= min_score)
+      .slice(0, parseInt(limit, 10));
+
+    if (topLeads.length === 0) {
+      return res.json({ success: false, message: 'No leads found matching minimum score threshold.' });
+    }
+
+    const { pushLeadToClay } = require('../auditor/clayIntegration');
+    let pushed = 0;
+    for (const lead of topLeads) {
+      try {
+        await pushLeadToClay(lead, webhookUrl);
+        pushed++;
+      } catch (_) {}
+    }
+
+    res.json({ success: true, count: pushed, message: `Successfully dispatched ${pushed} top-tier leads to Clay!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4e. Inbound Webhook: Clay calls this endpoint when enrichment completes
+app.post('/api/webhooks/clay', async (req, res) => {
+  try {
+    const { lead_id } = req.body;
+    if (!lead_id) return res.status(400).json({ error: 'Missing lead_id in payload' });
+
+    const lead = await db.getLeadById(lead_id);
+    if (!lead) return res.status(404).json({ error: `Lead with ID ${lead_id} not found` });
+
+    const { processClayEnrichmentPayload } = require('../auditor/clayIntegration');
+    const patch = processClayEnrichmentPayload(req.body);
+
+    if (patch._new_decision_maker) {
+      const dms = [...(lead.decision_makers || [])];
+      const newDM = patch._new_decision_maker;
+      delete patch._new_decision_maker;
+
+      if (!dms.some(d => d.name.toLowerCase() === newDM.name.toLowerCase())) {
+        dms.unshift(newDM);
+      }
+      patch.decision_makers = dms;
+    }
+
+    if (patch._ai_icebreaker) {
+      const bc = lead.battlecard || {};
+      bc.elevator_pitch = patch._ai_icebreaker;
+      patch.battlecard = bc;
+      delete patch._ai_icebreaker;
+    }
+
+    const updated = await db.updateLeadFields(lead_id, patch);
+    console.log(`[Clay Webhook] Enriched lead "${lead.name}" with verified phone/email!`);
+    res.json({ success: true, lead: updated });
+  } catch (err) {
+    console.error('Error processing Clay webhook:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 5. Delete Lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {

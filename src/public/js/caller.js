@@ -622,3 +622,38 @@ window.runCallerAiEnrich = async function() {
     btn.disabled = false;
   }
 };
+
+window.pushCallerLeadToClay = async function() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const webhookUrl = localStorage.getItem('clay_webhook_url');
+  if (!webhookUrl) {
+    const entered = prompt('Enter your Clay Inbound Webhook URL (from your Clay Table):');
+    if (!entered || !entered.startsWith('http')) return;
+    localStorage.setItem('clay_webhook_url', entered.trim());
+  }
+
+  const activeWebhook = localStorage.getItem('clay_webhook_url');
+  const btn = document.getElementById('callerClayBtn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '⏳ Pushing...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/leads/${lead.id}/clay-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: activeWebhook })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to push');
+
+    showToast(`🧊 Pushed "${lead.name}" to Clay!`);
+  } catch (err) {
+    showToast(`Clay Push Error: ${err.message}`, false);
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+};
