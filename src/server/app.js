@@ -203,6 +203,85 @@ app.post('/api/webhooks/clay', async (req, res) => {
   }
 });
 
+// 4f. Import Enriched Clay CSV / Sync Updates
+app.post('/api/leads/import-clay-csv', async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No CSV rows provided' });
+    }
+
+    const allLeads = await db.getAllLeads();
+    let updatedCount = 0;
+
+    for (const row of rows) {
+      const leadId = row.lead_id || row['Lead ID'] || row['id'];
+      const compName = (row.company_name || row['Company Name'] || row.name || row['Company'] || '').trim().toLowerCase();
+      const website = (row.website || row['Website'] || row['Domain'] || '').trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+
+      let target = null;
+      if (leadId) {
+        target = allLeads.find(l => l.id === leadId);
+      }
+      if (!target && compName) {
+        target = allLeads.find(l => l.name.toLowerCase() === compName || l.name.toLowerCase().includes(compName) || compName.includes(l.name.toLowerCase()));
+      }
+      if (!target && website && website.length > 3) {
+        target = allLeads.find(l => l.website && l.website.toLowerCase().includes(website));
+      }
+
+      if (target) {
+        const patch = {};
+
+        const phone = row.mobile_phone || row['Mobile Phone'] || row['Phone Number'] || row.phone || row['Direct Phone'];
+        if (phone && phone.trim() && phone.trim().length >= 6) {
+          patch.phone = phone.trim();
+        }
+
+        const email = row.work_email || row['Work Email'] || row.verified_email || row['Verified Email'] || row.email || row['Email'];
+        if (email && email.trim() && email.includes('@') && !email.includes('operations@') && !email.includes('info@')) {
+          patch.email = email.trim();
+        }
+
+        const dmName = row.decision_maker_name || row['Decision Maker Name'] || row['Full Name'] || row.name || row['Contact Name'];
+        const dmTitle = row.decision_maker_title || row['Job Title'] || row.title || row['Title'] || 'Executive';
+        const dmLinkedIn = row.linkedin_url || row['LinkedIn URL'] || row['Person LinkedIn URL'] || row['LinkedIn'];
+
+        if (dmName && dmName.trim() && dmName.trim().length > 2 && dmName.toLowerCase() !== compName) {
+          const dms = [...(target.decision_makers || [])];
+          const newDM = {
+            name: dmName.trim(),
+            title: dmTitle.trim(),
+            email_guess: patch.email || target.email || null,
+            direct_phone: patch.phone || target.phone || null,
+            linkedin_url: dmLinkedIn ? dmLinkedIn.trim() : null,
+            source: 'clay_enrichment',
+            verified: true
+          };
+
+          const existingIdx = dms.findIndex(d => d.name.toLowerCase() === dmName.trim().toLowerCase());
+          if (existingIdx >= 0) {
+            dms[existingIdx] = { ...dms[existingIdx], ...newDM };
+          } else {
+            dms.unshift(newDM);
+          }
+          patch.decision_makers = dms;
+        }
+
+        if (Object.keys(patch).length > 0) {
+          await db.updateLeadFields(target.id, patch);
+          updatedCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, updated_count: updatedCount, message: `Successfully synchronized ${updatedCount} leads from Clay!` });
+  } catch (err) {
+    console.error('Error importing Clay CSV:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 5. Delete Lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {

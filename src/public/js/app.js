@@ -814,3 +814,84 @@ window.pushTopTierLeadsToClay = async function() {
     btn.disabled = false;
   }
 };
+
+window.handleClayCsvUpload = function(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const text = e.target.result;
+    if (!text || text.length < 10) {
+      alert('The selected CSV file is empty.');
+      return;
+    }
+
+    const btn = document.getElementById('syncClayCsvBtn');
+    const origText = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = '⏳ Syncing...'; btn.disabled = true; }
+
+    try {
+      const rows = parseCsvText(text);
+      if (rows.length === 0) throw new Error('Could not parse any rows from the CSV file.');
+
+      const res = await fetch('/api/leads/import-clay-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Sync failed');
+
+      alert(`✅ ${data.message}`);
+      await fetchLeads();
+      await fetchStats();
+    } catch (err) {
+      alert(`Clay Sync Error: ${err.message}`);
+    } finally {
+      if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+      event.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+};
+
+function parseCsvText(csvText) {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const parseLine = (line) => {
+    const values = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        inQuotes = !inQuotes;
+      } else if (c === ',' && !inQuotes) {
+        values.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    values.push(cur.trim());
+    return values.map(v => v.replace(/^"|"$/g, '').trim());
+  };
+
+  const headers = parseLine(lines[0]);
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    if (values.length >= headers.length / 2) {
+      const row = {};
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] || '';
+      });
+      rows.push(row);
+    }
+  }
+
+  return rows;
+}
