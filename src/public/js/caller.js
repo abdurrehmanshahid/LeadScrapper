@@ -770,30 +770,102 @@ window.openLiveAuditModal = function(auditedLead) {
     </div>
   `;
 
-  // 2. Review Quotes & Friction
+  // 2. Review Intelligence Breakdown & Executive Summary
   const reviewContainer = document.getElementById('auditReviewQuotes');
   const intel = auditedLead.deep_intel || {};
-  const gReviews = intel.google_reviews || [];
-  const yelpSnippets = intel.yelp?.yelp_review_snippets || [];
-  const allReviewSnippets = [...new Set([...gReviews, ...yelpSnippets])];
+  const report = auditedLead.review_dossier?.intelligence_report;
+  const allReviewSnippets = [...new Set([...(intel.google_reviews || []), ...(intel.yelp?.yelp_review_snippets || [])])];
   const topFriction = auditedLead.review_dossier?.top_friction || 'Manual job coordination and spreadsheet tracking';
 
-  let reviewQuotesHtml = `
-    <div style="background: rgba(244,63,94,0.1); border-left: 3px solid #f43f5e; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; font-weight: 600; color: #fda4af;">
-      🚨 Primary Operational Friction: ${escapeHtml(topFriction)}
-    </div>
-  `;
+  let reviewQuotesHtml = '';
 
-  if (allReviewSnippets.length > 0) {
-    reviewQuotesHtml += allReviewSnippets.slice(0, 4).map(s => `
-      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.2); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem; line-height: 1.4;">
-        ${escapeHtml(s.substring(0, 180))}
-      </div>
-    `).join('');
-  } else if (intel.news?.latest_headline) {
+  if (report && report.totalReviewsAnalyzed > 0) {
+    const exec = report.executiveSummary;
+    const dist = report.ratingDistribution;
+
+    // Executive Summary Box
     reviewQuotesHtml += `
-      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem;">
-        📰 Recent News: "${escapeHtml(intel.news.latest_headline)}"
+      <div style="background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap;">
+          <span style="font-weight: 800; color: #f87171; font-size: 0.8rem; text-transform: uppercase;">
+            📊 Executive Friction Intelligence (${report.totalReviewsAnalyzed} Reviews Analyzed)
+          </span>
+          <span style="font-size: 0.725rem; color: #cbd5e1; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 4px;">
+            1★: <strong style="color: #f87171;">${dist[1]}</strong> | 2★: <strong style="color: #fbbf24;">${dist[2]}</strong> | 3★: <strong style="color: #38bdf8;">${dist[3]}</strong>
+          </span>
+        </div>
+        <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.4; margin-bottom: 4px;">
+          <strong style="color: #fda4af;">🚨 Primary Pain:</strong> ${escapeHtml(exec.primaryPain)} — ${escapeHtml(exec.primaryDetail)}
+        </div>
+        <div style="font-size: 0.775rem; color: #cbd5e1; line-height: 1.4; margin-bottom: 4px;">
+          <strong style="color: #fbbf24;">⏱️ Secondary Bottleneck:</strong> ${escapeHtml(exec.secondaryDetail)}
+        </div>
+        <div style="font-size: 0.75rem; color: #a5b4fc; line-height: 1.4;">
+          <strong style="color: #818cf8;">💡 Opportunity (2–3★ Feedback):</strong> ${escapeHtml(exec.improvementOpportunity)}
+        </div>
+      </div>
+    `;
+
+    // 1★ / 2★ / 3★ Breakdown Matrix Table
+    let tableRows = report.painPoints.map(p => {
+      const sevColor = p.severity === 'high' ? '#f43f5e' : p.severity === 'medium' ? '#fbbf24' : '#34d399';
+      return `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.75rem;">
+          <td style="padding: 4px 6px; font-weight: 600; color: #e2e8f0;">${escapeHtml(p.pain)}</td>
+          <td style="padding: 4px 6px; text-align: center; color: #f87171; font-weight: 700;">${p.starsBreakdown[1]}</td>
+          <td style="padding: 4px 6px; text-align: center; color: #fbbf24; font-weight: 700;">${p.starsBreakdown[2]}</td>
+          <td style="padding: 4px 6px; text-align: center; color: #38bdf8; font-weight: 700;">${p.starsBreakdown[3]}</td>
+          <td style="padding: 4px 6px; text-align: center; font-weight: 700; color: #f1f5f9;">${p.count} (${p.percentage}%)</td>
+          <td style="padding: 4px 6px; text-align: right;">
+            <span style="background: ${sevColor}22; color: ${sevColor}; border: 1px solid ${sevColor}55; padding: 1px 6px; border-radius: 4px; font-size: 0.675rem; font-weight: 800; text-transform: uppercase;">
+              ${p.severity}
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    reviewQuotesHtml += `
+      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.7rem; text-transform: uppercase;">
+              <th style="padding: 4px 6px;">Friction Category</th>
+              <th style="padding: 4px 6px; text-align: center; color: #f87171;">1★</th>
+              <th style="padding: 4px 6px; text-align: center; color: #fbbf24;">2★</th>
+              <th style="padding: 4px 6px; text-align: center; color: #38bdf8;">3★</th>
+              <th style="padding: 4px 6px; text-align: center;">Total (%)</th>
+              <th style="padding: 4px 6px; text-align: right;">Severity</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    reviewQuotesHtml += `
+      <div style="background: rgba(244,63,94,0.1); border-left: 3px solid #f43f5e; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; font-weight: 600; color: #fda4af;">
+        🚨 Primary Operational Friction: ${escapeHtml(topFriction)}
+      </div>
+    `;
+  }
+
+  // Verbatim Customer Quotes
+  if (allReviewSnippets.length > 0) {
+    reviewQuotesHtml += `
+      <div style="margin-top: 6px;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">
+          💬 Verbatim Negative Customer Feedback:
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          ${allReviewSnippets.slice(0, 3).map(s => `
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.2); padding: 5px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem; line-height: 1.4;">
+              ${escapeHtml(s.substring(0, 180))}
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   } else {

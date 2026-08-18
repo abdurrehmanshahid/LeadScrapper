@@ -178,15 +178,19 @@ function generateBattlecard(lead) {
       : '';
     const hiringHook = hiringSignals.length > 0 ? ` I saw that you're currently ${hiringSignals[0].toLowerCase()},` : '';
     const ageCredential = yearsInBusiness ? ` For a business with ${yearsInBusiness} in the community,` : '';
+    const report = lead.review_dossier?.intelligence_report;
 
-    if (isContractor) {
-      opener = `Hi, calling from Big Binary Tech's operations team.${newsHook}${hiringHook} We work with established ${industry} contractors to eliminate manual job dispatch and billing bottlenecks.${ageCredential} Our technical audit showed that while your client reputation is strong${reviewsCount > 0 ? ` (${reviewsCount} reviews)` : ''}, your backend likely still relies on disconnected spreadsheets or separate invoicing apps. We build unified Odoo systems that cut contractor admin hours by 60% and get invoices paid twice as fast. Do you have 2 minutes to hear the 3 friction points we identified?`;
+    if (report && report.totalReviewsAnalyzed > 0) {
+      const topDetail = report.executiveSummary.primaryDetail;
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing ${industry} providers replace disconnected scheduling and intake tools with a single automated Odoo platform. Our diagnostic scan of your public feedback showed that ${topDetail} Are communication handoffs or administrative bottlenecks putting unnecessary pressure on your staff?`;
+    } else if (isContractor) {
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing ${industry} contractors eliminate the spreadsheet shuffle between customer calls, crew dispatch, and final invoicing with a custom Odoo workflow. Are manual dispatch handoffs or delayed payment collections currently creating friction for your team?`;
     } else if (isHealthcare) {
-      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing medical and specialty clinics replace fragmented patient booking, intake, and invoicing with a single HIPAA-aligned Odoo platform.${ageCredential} Are manual scheduling handoffs or billing reconciliation delays costing your admin staff hours each week?`;
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing medical and specialty clinics replace fragmented patient booking, intake, and invoicing with a single HIPAA-aligned Odoo platform. Are manual scheduling handoffs or billing reconciliation delays costing your admin staff hours each week?`;
     } else if (isWholesale) {
-      opener = `Hi, calling from Big Binary Tech.${newsHook}${hiringHook} We specialize in Odoo ERP for wholesale and distribution operations.${ageCredential} We noticed ${companyName} doesn't have an automated real-time inventory and purchase order bridge — meaning teams are reconciling Excel at month-end. We connect inventory, purchasing, and invoicing into one live system. Is that an operational pain point for your team?`;
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help distribution and wholesale teams replace disconnected inventory, order processing, and accounting spreadsheets with a unified Odoo ERP system. Is manual inventory syncing or delayed order invoicing slowing down your fulfillment speed?`;
     } else {
-      opener = `Hi, this is Big Binary Tech's technical advisory group.${newsHook}${hiringHook} We recently ran a digital operations audit on established ${industry} firms in your area.${ageCredential} We identified two specific friction points in your client intake and dispatch flow that usually cause duplicate data entry and delayed invoicing. I'm not calling to sell generic software — I wanted to share the 2-minute diagnostic findings. Worth a brief conversation?`;
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook}${ageCredential} We build custom Odoo operations platforms that unify customer intake, job tracking, and automated billing into a single screen. Are disconnected software tools or manual double-entry currently creating administrative bottlenecks for your business?`;
     }
 
     objections.push(

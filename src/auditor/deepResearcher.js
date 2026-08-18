@@ -251,16 +251,18 @@ async function searchOpenCorporates(companyName) {
   };
 }
 
-// ─── Google Maps "Lowest Rating" Review Scraper ────────────────────────────────
+// ─── Google Maps "Lowest Rating" Review Dataset Scraper ─────────────────────────
 
 /**
- * Scrapes Google Maps reviews filtered/sorted by "Lowest rating" using semantic text and ARIA selectors
+ * Scrapes Google Maps reviews filtered by "Lowest rating", exhaustively scrolling the container
+ * to extract structured review objects: { rating, reviewer, date, text }.
+ *
  * @param {string} companyName
  * @param {string} location
  * @param {object} browser - Puppeteer browser instance
- * @returns {Promise<Array<string>>}
+ * @returns {Promise<Array<{ rating: number, reviewer: string, date: string, text: string }>>}
  */
-async function scrapeGoogleLowestReviews(companyName, location, browser) {
+async function scrapeGoogleReviewsDataset(companyName, location, browser) {
   if (!browser) return [];
   let page = null;
   try {
@@ -277,16 +279,14 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 1. Open the Place card if in search list
+    // 1. Open Place card if search results feed
     await page.evaluate(() => {
       const placeLinks = Array.from(document.querySelectorAll('a[href*="/maps/place/"], [role="feed"] a, [role="article"] a'));
-      if (placeLinks.length > 0) {
-        placeLinks[0].click();
-      }
+      if (placeLinks.length > 0) placeLinks[0].click();
     });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 2. Open the Reviews panel (Semantic ARIA / text matching)
+    // 2. Open Reviews panel (Semantic ARIA / text matching)
     await page.evaluate(() => {
       const allButtons = Array.from(document.querySelectorAll('button, div[role="tab"], div[role="button"], span'));
       const revBtn = allButtons.find(b => {
@@ -298,11 +298,10 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
     });
     await new Promise(r => setTimeout(r, 2000));
 
-    // 3. Find and click the reviews sort button / chip
+    // 3. Find and click reviews sort button / chip
     const sortOpened = await page.evaluate(() => {
       const allButtons = Array.from(document.querySelectorAll('button, div[role="radio"], div[role="button"], span'));
       
-      // Check if "Lowest rating" chip is already visible on screen
       const lowestDirect = allButtons.find(b => {
         const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
         const aria = (b.getAttribute('aria-label') || '').toLowerCase();
@@ -313,7 +312,6 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
         return 'chip_clicked';
       }
 
-      // Find sort button via ARIA label, title, or text containing "Sort"
       const sortBtn = allButtons.find(b => {
         const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
         const aria = (b.getAttribute('aria-label') || '').toLowerCase();
@@ -343,14 +341,26 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
       await new Promise(r => setTimeout(r, 2000));
     }
 
-    // 5. Scroll through the review container to load reviews
-    for (let i = 0; i < 3; i++) {
-      await page.evaluate(() => {
+    // 5. Exhaustively scroll through review container until no new reviews appear or max 8 scrolls
+    let prevReviewCount = 0;
+    let stableCountRounds = 0;
+
+    for (let scroll = 0; scroll < 8; scroll++) {
+      const currentCount = await page.evaluate(() => {
         const scrollables = Array.from(document.querySelectorAll('div[role="main"], div[tabindex="-1"], div'));
         const container = scrollables.find(el => el.scrollHeight > 1000 && el.clientHeight > 200);
-        if (container) container.scrollTop += 2500;
+        if (container) container.scrollTop += 3500;
+        return document.querySelectorAll('div[data-review-id], div[role="article"]').length;
       });
-      await new Promise(r => setTimeout(r, 500));
+
+      if (currentCount === prevReviewCount && currentCount > 0) {
+        stableCountRounds++;
+        if (stableCountRounds >= 2) break; // Exhausted dataset
+      } else {
+        stableCountRounds = 0;
+        prevReviewCount = currentCount;
+      }
+      await new Promise(r => setTimeout(r, 700));
     }
 
     // 6. Expand all "See more" / "More" text buttons
@@ -366,22 +376,25 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
     });
     await new Promise(r => setTimeout(r, 400));
 
-    // 7. Extract reviews, rating, author, and text
-    const snippets = await page.evaluate(() => {
+    // 7. Extract structured review objects
+    const structuredReviews = await page.evaluate(() => {
       const results = [];
       const seen = new Set();
       
       const allCards = Array.from(document.querySelectorAll('div[data-review-id], div[role="article"], div'));
-      const reviewCards = allCards.filter(c => c.getAttribute('data-review-id') || (c.innerText && c.innerText.includes('★') && c.innerText.length > 50) || c.querySelector('[aria-label*="star" i]'));
+      const reviewCards = allCards.filter(c => c.getAttribute('data-review-id') || (c.innerText && c.innerText.includes('★') && c.innerText.length > 40) || c.querySelector('[aria-label*="star" i]'));
 
       reviewCards.forEach(card => {
         const starEl = card.querySelector('[aria-label*="star" i], [aria-label*="stars" i]');
         const starAria = starEl ? starEl.getAttribute('aria-label') || '' : '';
         const starMatch = starAria.match(/(\d+)/);
-        const stars = starMatch ? parseInt(starMatch[1], 10) : (card.innerText.includes('1 star') ? 1 : 1);
+        const stars = starMatch ? parseInt(starMatch[1], 10) : 1;
 
         const authorEl = card.querySelector('button[aria-label*="profile" i], h3, [class*="title"], [class*="author"]');
-        const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : 'Patient / Customer';
+        const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : 'Customer';
+
+        const dateEl = card.querySelector('[class*="date"], [class*="time"], span[class*="rsqaWe"], span[class*="dehysf"]');
+        const date = dateEl ? (dateEl.innerText || dateEl.textContent || '').trim() : 'Recent';
 
         let fullText = (card.innerText || card.textContent || '').trim();
         if (fullText.includes('Response from the owner')) {
@@ -401,10 +414,15 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
 
         const body = lines.join(' ').trim();
         if (body.length > 20) {
-          const key = body.substring(0, 40).toLowerCase();
+          const key = (author + '_' + body.substring(0, 40)).toLowerCase();
           if (!seen.has(key)) {
             seen.add(key);
-            results.push(`[${stars}★ - ${author}]: "${body}"`);
+            results.push({
+              rating: stars,
+              reviewer: author,
+              date: date,
+              text: body
+            });
           }
         }
       });
@@ -412,8 +430,8 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
       return results;
     });
 
-    console.log(`[GMB Lowest Hunter] Discovered ${snippets.length} negative reviews for ${companyName}`);
-    return snippets;
+    console.log(`[GMB Lowest Dataset Hunter] Discovered ${structuredReviews.length} structured reviews for ${companyName}`);
+    return structuredReviews;
   } catch (err) {
     console.warn(`[GMB Lowest Hunter] Error for ${companyName}:`, err.message);
     return [];
@@ -425,52 +443,54 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
 // ─── Main Orchestrator ─────────────────────────────────────────────────────────
 
 /**
- * Runs all research sources in parallel. Returns a `deep_intel` object.
- * Any individual source failure is silently skipped (returns null for that key).
+ * Runs all research sources in parallel. Returns a comprehensive `deep_intel` object.
  *
  * @param {string} companyName
  * @param {string} location
- * @param {string} website  — company website URL (used for job posting search)
- * @param {object} [browser] — optional Puppeteer browser instance for Google Maps Lowest reviews
+ * @param {string} website
+ * @param {object} [browser]
  * @returns {Promise<object>}
  */
 async function deepResearch(companyName, location, website, browser) {
-  const [yelp, news, hiring, bbb, corp, gmbLowest] = await Promise.allSettled([
+  const [yelp, news, hiring, bbb, corp, gmbReviews] = await Promise.allSettled([
     searchYelp(companyName, location),
     searchGoogleNews(companyName),
     searchJobPostings(companyName, website),
     searchBBB(companyName, location),
     searchOpenCorporates(companyName),
-    browser ? scrapeGoogleLowestReviews(companyName, location, browser) : Promise.resolve([])
+    browser ? scrapeGoogleReviewsDataset(companyName, location, browser) : Promise.resolve([])
   ]);
 
   const yelpData = yelp.status === 'fulfilled' ? yelp.value : null;
-  const lowestReviews = gmbLowest.status === 'fulfilled' ? (gmbLowest.value || []) : [];
+  const structuredGmb = gmbReviews.status === 'fulfilled' ? (gmbReviews.value || []) : [];
 
-  // Merge Google Lowest reviews into yelp_review_snippets so NLP processes all customer complaints
-  if (lowestReviews.length > 0) {
-    if (!yelpData) {
-      yelpData = {
-        yelp_rating: null,
-        yelp_review_count: lowestReviews.length,
-        yelp_categories: [],
-        yelp_review_snippets: lowestReviews,
-        yelp_url: ''
-      };
-    } else {
-      yelpData.yelp_review_snippets = [...lowestReviews, ...(yelpData.yelp_review_snippets || [])];
-    }
+  // Convert structured GMB reviews into quoted strings for NLP compatibility
+  const gmbFormattedQuotes = structuredGmb.map(r => `[${r.rating}★ - ${r.reviewer}]: "${r.text}"`);
+
+  let mergedSnippets = [...gmbFormattedQuotes];
+  if (yelpData && Array.isArray(yelpData.yelp_review_snippets)) {
+    mergedSnippets.push(...yelpData.yelp_review_snippets);
   }
 
+  const finalYelpData = yelpData || {
+    yelp_rating: null,
+    yelp_review_count: structuredGmb.length,
+    yelp_categories: [],
+    yelp_review_snippets: mergedSnippets,
+    yelp_url: ''
+  };
+  finalYelpData.yelp_review_snippets = mergedSnippets;
+
   return {
-    yelp:        yelpData,
-    news:        news.status        === 'fulfilled' ? news.value        : null,
-    hiring:      hiring.status      === 'fulfilled' ? hiring.value      : null,
-    bbb:         bbb.status         === 'fulfilled' ? bbb.value         : null,
-    corporation: corp.status        === 'fulfilled' ? corp.value        : null,
-    google_reviews: lowestReviews,
-    researched_at: new Date().toISOString()
+    yelp:            finalYelpData,
+    news:            news.status        === 'fulfilled' ? news.value        : null,
+    hiring:          hiring.status      === 'fulfilled' ? hiring.value      : null,
+    bbb:             bbb.status         === 'fulfilled' ? bbb.value         : null,
+    corporation:     corp.status        === 'fulfilled' ? corp.value        : null,
+    google_reviews:  gmbFormattedQuotes,
+    reviews_dataset: structuredGmb,
+    researched_at:   new Date().toISOString()
   };
 }
 
-module.exports = { deepResearch, scrapeGoogleLowestReviews };
+module.exports = { deepResearch, scrapeGoogleReviewsDataset };
