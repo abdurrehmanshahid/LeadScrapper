@@ -349,6 +349,66 @@
     </div>
   </div>
 
+  <!-- Live Tech & Review Audit Findings Modal -->
+  <div id="liveAuditModal" class="modal-overlay" style="display: none; z-index: 10000;">
+    <div class="modal-content" style="max-width: 820px; max-height: 90vh; overflow-y: auto; background: #0b1329; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.4rem;">⚡</span>
+            <h2 id="auditModalTitle" style="font-size: 1.3rem; font-weight: 800; color: #fbbf24; margin: 0;">Live Tech & Negative Review Audit</h2>
+          </div>
+          <p id="auditModalSubtitle" style="font-size: 0.8rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Real-time technographic diagnostics & customer review friction scan</p>
+        </div>
+        <button onclick="closeLiveAuditModal()" style="background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer;">&times;</button>
+      </div>
+
+      <!-- Diagnostic Grid -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        <!-- Left: Web Tech Vulnerabilities -->
+        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 1rem;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🌐</span> Web Tech & Infrastructure Health
+          </div>
+          <div id="auditTechMetrics" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Right: Customer Review Friction ("Bad Stuff") -->
+        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 8px; padding: 1rem;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #f43f5e; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>😡</span> Customer Negative Voice & Complaints
+          </div>
+          <div id="auditReviewQuotes" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem; max-height: 180px; overflow-y: auto;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Re-synthesized Pitch Hook Preview -->
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+        <div style="font-size: 0.8rem; font-weight: 700; color: #34d399; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+          <span>🎯</span> Dynamically Re-Synthesized Consultative Pitch
+        </div>
+        <div id="auditPitchPreview" style="font-size: 0.875rem; color: #f1f5f9; line-height: 1.5; font-style: italic; background: rgba(0,0,0,0.3); padding: 0.75rem 1rem; border-radius: 6px; border-left: 3px solid #10b981;">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem;">
+        <span style="font-size: 0.75rem; color: #64748b;">Findings are backed by live website scrape + Yelp/GMB review NLP</span>
+        <div style="display: flex; gap: 0.75rem;">
+          <button type="button" onclick="closeLiveAuditModal()" class="btn btn-secondary">Keep Current</button>
+          <button type="button" onclick="applyLiveAuditFindings()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
+            ✅ Apply & Update Company Context
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/caller.js"></script>
 </body>
 </html>

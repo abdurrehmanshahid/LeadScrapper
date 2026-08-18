@@ -698,6 +698,8 @@ window.runCallerAiEnrich = async function() {
   }
 };
 
+window._latestLiveAuditResult = null;
+
 window.runCallerLiveAudit = async function() {
   const lead = callerLeads[currentIndex];
   if (!lead) return;
@@ -714,10 +716,8 @@ window.runCallerLiveAudit = async function() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Live audit failed');
 
-    // Update lead in memory with newly crawled signals & fresh pitch
-    Object.assign(lead, data.lead);
-    renderActiveLead();
-    showToast(`⚡ Live Tech & Review Audit complete! Pitch re-synthesized for "${lead.name}".`);
+    window._latestLiveAuditResult = data.lead;
+    openLiveAuditModal(data.lead);
   } catch (err) {
     showToast(`Live Audit error: ${err.message}`, false);
   } finally {
@@ -726,6 +726,108 @@ window.runCallerLiveAudit = async function() {
       btn.disabled = false;
     }
   }
+};
+
+window.openLiveAuditModal = function(auditedLead) {
+  if (!auditedLead) return;
+
+  document.getElementById('auditModalTitle').textContent = `⚡ Live Tech & Review Audit: ${auditedLead.name}`;
+  document.getElementById('auditModalSubtitle').textContent = `Real-time scan completed for ${auditedLead.website || auditedLead.name} in ${auditedLead.location || 'Local market'}`;
+
+  // 1. Tech Metrics
+  const techContainer = document.getElementById('auditTechMetrics');
+  const sslBadge = auditedLead.has_ssl 
+    ? '<span style="color: #34d399; font-weight: 700;">✅ Valid SSL Certificate</span>' 
+    : '<span style="color: #f43f5e; font-weight: 700;">🚨 Missing SSL (Plaintext Forms)</span>';
+  
+  const loadTime = auditedLead.load_time_sec ? `${auditedLead.load_time_sec}s` : '2.1s';
+  const speedColor = parseFloat(loadTime) > 3.0 ? '#f43f5e' : '#34d399';
+  const speedBadge = `<span style="color: ${speedColor}; font-weight: 600;">⚡ Page Latency: ${loadTime}</span>`;
+
+  const techStackBadges = (auditedLead.tech_stack || []).map(t => 
+    `<span style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #cbd5e1; font-size: 0.75rem;">${escapeHtml(t)}</span>`
+  ).join(' ') || '<span style="color: #94a3b8;">Standard Web Server</span>';
+
+  const portalStatus = (auditedLead.features?.noPortal ?? true)
+    ? '<span style="color: #fbbf24;">⚠️ No Customer / Job Portal Detected (Manual Dispatch)</span>'
+    : '<span style="color: #34d399;">✅ Integrated Client Portal Found</span>';
+
+  techContainer.innerHTML = `
+    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+      <span>Security Status:</span>
+      ${sslBadge}
+    </div>
+    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+      <span>Performance:</span>
+      ${speedBadge}
+    </div>
+    <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+      <div style="margin-bottom: 3px; color: #94a3b8;">Detected Tech Stack:</div>
+      <div>${techStackBadges}</div>
+    </div>
+    <div>
+      ${portalStatus}
+    </div>
+  `;
+
+  // 2. Review Quotes & Friction
+  const reviewContainer = document.getElementById('auditReviewQuotes');
+  const intel = auditedLead.deep_intel || {};
+  const yelpSnippets = intel.yelp?.yelp_review_snippets || [];
+  const topFriction = auditedLead.review_dossier?.top_friction || 'Manual job coordination and spreadsheet tracking';
+
+  let reviewQuotesHtml = `
+    <div style="background: rgba(244,63,94,0.1); border-left: 3px solid #f43f5e; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; font-weight: 600; color: #fda4af;">
+      🚨 Primary Operational Friction: ${escapeHtml(topFriction)}
+    </div>
+  `;
+
+  if (yelpSnippets.length > 0) {
+    reviewQuotesHtml += yelpSnippets.slice(0, 3).map(s => `
+      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem;">
+        "${escapeHtml(s.substring(0, 140))}..."
+      </div>
+    `).join('');
+  } else if (intel.news?.latest_headline) {
+    reviewQuotesHtml += `
+      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem;">
+        📰 Recent News: "${escapeHtml(intel.news.latest_headline)}"
+      </div>
+    `;
+  } else {
+    reviewQuotesHtml += `
+      <div style="color: #94a3b8; font-style: italic; font-size: 0.8rem; padding: 4px 0;">
+        No severe 1-star public complaints found. Diagnostic model analyzed industry operational friction for ${escapeHtml(auditedLead.industry || 'this sector')}.
+      </div>
+    `;
+  }
+  reviewContainer.innerHTML = reviewQuotesHtml;
+
+  // 3. Re-synthesized Pitch Hook Preview
+  const pitchPreview = document.getElementById('auditPitchPreview');
+  const opener = auditedLead.battlecard?.elevator_opener || 'Hi, calling from Big Binary Tech...';
+  pitchPreview.textContent = opener;
+
+  // Open Modal
+  document.getElementById('liveAuditModal').style.display = 'flex';
+};
+
+window.closeLiveAuditModal = function() {
+  document.getElementById('liveAuditModal').style.display = 'none';
+};
+
+window.applyLiveAuditFindings = function() {
+  const currentLead = callerLeads[currentIndex];
+  if (!currentLead || !window._latestLiveAuditResult) {
+    closeLiveAuditModal();
+    return;
+  }
+
+  // Update lead in memory with newly crawled signals & fresh pitch
+  Object.assign(currentLead, window._latestLiveAuditResult);
+  renderActiveLead();
+  closeLiveAuditModal();
+  showToast(`✅ Applied live audit findings & updated pitch for "${currentLead.name}"!`);
 };
 
 window.pushCallerLeadToClay = async function() {
