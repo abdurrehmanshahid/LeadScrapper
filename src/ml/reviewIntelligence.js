@@ -34,7 +34,8 @@ async function getClassifier() {
  * Analyzes company reviews or descriptions using Zero-Shot NLI
  */
 async function analyzeFrictionWithNLI(text) {
-  if (!text || text.length < 10) {
+  const str = Array.isArray(text) ? text.join(' ') : String(text || '');
+  if (!str || str.length < 10) {
     return {
       top_friction: 'Manual Operations & Workflow Overhead',
       confidence: 0.85,
@@ -48,7 +49,7 @@ async function analyzeFrictionWithNLI(text) {
   try {
     const pipe = await getClassifier();
     if (pipe) {
-      const result = await pipe(text.substring(0, 500), FRICTION_HYPOTHESES, {
+      const result = await pipe(str.substring(0, 500), FRICTION_HYPOTHESES, {
         multi_label: true
       });
 
@@ -68,11 +69,12 @@ async function analyzeFrictionWithNLI(text) {
   }
 
   // Fast heuristic NLI fallback
-  return analyzeFrictionHeuristic(text);
+  return analyzeFrictionHeuristic(str);
 }
 
 function analyzeFrictionHeuristic(text) {
-  const lower = text.toLowerCase();
+  const str = Array.isArray(text) ? text.join(' ') : String(text || '');
+  const lower = str.toLowerCase();
   const scores = [];
 
   // Scheduling & dispatch signals
@@ -130,6 +132,27 @@ function analyzeFrictionHeuristic(text) {
  * @param {string} industry
  * @returns {object}
  */
+// Extracts the most negatively-loaded sentences from a review text.
+// Used to surface what a customer actually said, not just which bucket it fell into.
+function extractComplaintSentences(text, limit = 2) {
+  if (!text || text.length < 15) return [];
+
+  const sentences = text
+    .replace(/([.!?])\s+/g, '$1|||')
+    .split('|||')
+    .map(s => s.trim())
+    .filter(s => s.length > 20);
+
+  const NEGATIVE = /\b(never|awful|terrible|horrible|worst|bad|poor|rude|unprofessional|slow|ignor|cancel|disappoint|frustrat|useless|broken|couldn't|didn't|refused|fail|wrong|mistake|overcharg|scam|waste|disgust|filthy|confus|incompetent|disrespect|condescend|dismissive|lied|deceiv|fraud|mislead|unaccept)\b/i;
+
+  return sentences
+    .map(s => ({ text: s, score: (s.match(new RegExp(NEGATIVE.source, 'gi')) || []).length }))
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(s => s.text.length > 130 ? s.text.substring(0, 127).replace(/\s\S*$/, '...') : s.text);
+}
+
 function analyzeReviewIntelligenceDataset(reviews = [], companyName = 'Company', industry = 'Operations') {
   if (!reviews || reviews.length === 0) {
     return {
@@ -155,29 +178,38 @@ function analyzeReviewIntelligenceDataset(reviews = [], companyName = 'Company',
     else if (star >= 3) ratingDistribution[3]++;
   });
 
-  // 2. Define Category Classifier Rules
+  // 2. Tight category regexes — each requires SPECIFIC complaint signals,
+  //    not broad words like "staff" or "wait" that appear in almost every review.
   const CATEGORIES = {
-    'Service & Communication': {
-      regex: /english|language|spanish|speak|understand|communication|rude|unhelpful|attitude|ignored|nobody|front desk|receptionist|phone|answer|callback|doctor|nurse|staff/i
+    'Staff Behavior': {
+      regex: /\b(?:rude|unprofessional|disrespectful|dismissive|condescending|nasty|hostile|arrogant|sarcastic|snappy|incompetent|useless)\b.{0,40}(?:staff|employee|worker|doctor|nurse|receptionist|team|person|manager|owner)?|(?:staff|employee|worker|doctor|nurse|receptionist|person|manager)\b.{0,25}\b(?:rude|unprofessional|disrespectful|dismissive|nasty|hostile|condescending|arrogant|lied|deceived|threatened|screamed|yelled)/i
     },
-    'Wait Times & Scheduling': {
-      regex: /wait|hour|delayed|late|schedule|appointment|intake|queue|slow|holding|timing|reschedule|overbook/i
+    'Response & Follow-Up Failure': {
+      regex: /(?:never|no one|nobody|didn'?t|did not|won'?t|wouldn'?t|can'?t|could not)\s+(?:answer|respond|reply|call(?:\s+back)?|pick\s+up|return(?:\s+(?:my|our|the)\s+call)?|follow(?:\s+|-)?up|contact\s+(?:me|us))|left\s+(?:a\s+)?(?:message|voicemail).{0,20}(?:never|no\s+one|nobody|no\s+response|no\s+reply)|(?:unanswered|unreachable|ignored\s+(?:my|our)|went\s+to\s+voicemail|no\s+(?:response|reply|callback|follow.?up))/i
     },
-    'Billing & Financial Transparency': {
-      regex: /bill|invoice|cost|charge|insurance|overcharge|hidden fee|money|refund|receipt|price|expensive|copay/i
+    'Wait Times & Delays': {
+      regex: /wait(?:ed|ing)?\s+(?:over|more\s+than|almost|at\s+least|for)?\s*\d+\s*(?:hour|minute|day|week|month)|(?:no.show|never\s+showed\s+up|didn'?t\s+show\s+up|stood\s+(?:me|us)\s+up|\d+\s*hour[s]?\s+late|\d+\s*day[s]?\s+(?:late|overdue)|appointment\s+(?:cancel|reschedul|no.show)|overbooked|running\s+(?:very\s+)?late)/i
     },
-    'Process & Coordination Overhead': {
-      regex: /paperwork|form|lost|record|portal|online|system|disconnect|confused|handoff|dispatch|tracking/i
+    'Billing & Overcharging': {
+      regex: /(?:overcharg|double.charg|charged\s+(?:twice|wrong|more\s+than\s+quoted|extra|incorrectly)|hidden\s+(?:fee|charge|cost)|surprise\s+(?:charge|fee|bill)|(?:refund|money\s+back)\s+(?:refused|denied|won'?t\s+give|never\s+received)|wrong(?:ly)?\s+(?:billed|charged|invoiced)|unauthorized\s+charge|never\s+authorized)/i
     },
-    'Quality & Facility Environment': {
-      regex: /a\/c|air condition|cold|hot|clean|dirty|equipment|broken|room|noise|parking|location/i
+    'Wrong / Inaccurate Work': {
+      regex: /(?:wrong|incorrect|inaccurate|gave\s+(?:me|us)\s+(?:the\s+)?wrong|mix(?:ed)?\s+up|misdiagnos|wrong\s+(?:order|result|test|prescription|treatment|item|address|information|diagnosis)|error\s+(?:in|on|with)|made\s+(?:a\s+)?mistake|had\s+to\s+(?:redo|fix|redo)|wasn'?t\s+(?:right|correct|what\s+I\s+(?:ordered|asked\s+for)))/i
+    },
+    'Lost Records & Disorganization': {
+      regex: /(?:lost|misplaced|can'?t\s+find|couldn'?t\s+locate|missing)\s+(?:my\s+|our\s+)?(?:record|file|chart|result|paperwork|document|prescription|order|information|account)|(?:completely\s+)?(?:disorganized|chaotic|no\s+(?:record|system|process)|conflicting\s+(?:information|instructions|advice)|told\s+(?:me|us)\s+(?:different|wrong|conflicting))/i
+    },
+    'Facility & Environment': {
+      regex: /(?:dirty|unclean|filthy|disgusting|unsanitary|moldy|foul\s+smell|smells?\s+(?:like|of)|stained?|trash|roach|rodent|pest|infest).{0,30}(?:bathroom|restroom|room|facility|floor|surface|kitchen|area|place)?|(?:broken|not\s+working|out\s+of\s+order|malfunctioning)\s+(?:ac|air\s+condition|hvac|heat|elevator|bathroom|equipment|machine)/i
     }
   };
 
   const matrix = {};
   Object.keys(CATEGORIES).forEach(cat => {
-    matrix[cat] = { total: 0, stars: { 1: 0, 2: 0, 3: 0 }, examples: [] };
+    matrix[cat] = { total: 0, stars: { 1: 0, 2: 0, 3: 0 }, examples: [], specific_complaints: [] };
   });
+  // Catch-all for reviews that don't match any specific category
+  const UNCLASSIFIED = { total: 0, stars: { 1: 0, 2: 0, 3: 0 }, examples: [], specific_complaints: [] };
 
   reviews.forEach(review => {
     const text = review.text || '';
@@ -189,52 +221,78 @@ function analyzeReviewIntelligenceDataset(reviews = [], companyName = 'Company',
       if (def.regex.test(text)) {
         matrix[cat].total++;
         matrix[cat].stars[starKey]++;
-        if (matrix[cat].examples.length < 2) {
-          matrix[cat].examples.push(`[${star}★ - ${review.reviewer}]: "${text.substring(0, 120)}..."`);
+        // Store verbatim excerpt as example
+        if (matrix[cat].examples.length < 3) {
+          const excerpt = text.length > 140 ? text.substring(0, 137) + '...' : text;
+          matrix[cat].examples.push({ star, reviewer: review.reviewer, excerpt });
+        }
+        // Extract specific complaint sentences from this review for this category
+        const complaints = extractComplaintSentences(text, 2);
+        for (const c of complaints) {
+          const key = c.substring(0, 35).toLowerCase();
+          if (!matrix[cat].specific_complaints.some(sc => sc.toLowerCase().startsWith(key.substring(0, 20)))) {
+            matrix[cat].specific_complaints.push(c);
+          }
         }
         matched = true;
       }
     });
 
     if (!matched) {
-      matrix['Service & Communication'].total++;
-      matrix['Service & Communication'].stars[starKey]++;
-      if (matrix['Service & Communication'].examples.length < 2) {
-        matrix['Service & Communication'].examples.push(`[${star}★ - ${review.reviewer}]: "${text.substring(0, 120)}..."`);
-      }
+      UNCLASSIFIED.total++;
+      UNCLASSIFIED.stars[starKey]++;
+      const excerpt = text.length > 140 ? text.substring(0, 137) + '...' : text;
+      if (UNCLASSIFIED.examples.length < 3) UNCLASSIFIED.examples.push({ star, reviewer: review.reviewer, excerpt });
+      const complaints = extractComplaintSentences(text, 1);
+      if (complaints[0]) UNCLASSIFIED.specific_complaints.push(complaints[0]);
     }
   });
 
-  // Calculate percentages and severity
+  // If unclassified reviews exist, add them as "General Dissatisfaction"
+  if (UNCLASSIFIED.total > 0) {
+    matrix['General Dissatisfaction'] = UNCLASSIFIED;
+  }
+
   const totalAnalyzed = reviews.length;
   const painPoints = Object.entries(matrix)
     .filter(([_, data]) => data.total > 0)
     .map(([pain, data]) => {
       const pct = Math.round((data.total / totalAnalyzed) * 1000) / 10;
-      const severity = data.stars[1] >= 2 || pct >= 30 ? 'high' : pct >= 15 ? 'medium' : 'low';
+      const severity = data.stars[1] >= 2 || pct >= 35 ? 'high' : pct >= 15 ? 'medium' : 'low';
       return {
         pain,
         count: data.total,
         percentage: pct,
         starsBreakdown: data.stars,
         severity,
-        examples: data.examples
+        examples: data.examples,
+        specific_complaints: data.specific_complaints.slice(0, 4)
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  const top1 = painPoints[0] || { pain: 'Service & Communication', count: 0, percentage: 0, starsBreakdown: { 1: 0, 2: 0, 3: 0 }, examples: [] };
-  const top2 = painPoints[1] || { pain: 'Wait Times & Scheduling', count: 0, percentage: 0, starsBreakdown: { 1: 0, 2: 0, 3: 0 }, examples: [] };
+  const top1 = painPoints[0] || { pain: 'General Dissatisfaction', count: 0, percentage: 0, starsBreakdown: { 1: 0, 2: 0, 3: 0 }, specific_complaints: [] };
+  const top2 = painPoints[1] || null;
 
-  const primaryDetail = `${top1.count} of ${totalAnalyzed} analyzed low-rating reviews (${top1.percentage}%) cite ${top1.pain.toLowerCase()} issues, including ${top1.starsBreakdown[1]} critical 1-star complaints.`;
-  const secondaryDetail = top2.count > 0 
-    ? `${top2.count} reviews (${top2.percentage}%) point to ${top2.pain.toLowerCase()} as a secondary operational bottleneck.`
-    : `General workflow coordination and customer handoff overhead.`;
-  
+  // Primary detail: reference actual complaint sentences, not just the category label
+  const p1complaints = (top1.specific_complaints || []).slice(0, 3);
+  const primaryDetail = p1complaints.length > 0
+    ? `${top1.count} of ${totalAnalyzed} reviews (${top1.percentage}%) — recurring complaints: ${p1complaints.map(c => `"${c}"`).join(' | ')}`
+    : `${top1.count} of ${totalAnalyzed} analyzed reviews (${top1.percentage}%) cite ${top1.pain.toLowerCase()}, with ${top1.starsBreakdown[1]} at the critical 1-star level.`;
+
+  const secondaryDetail = top2 && top2.count > 0
+    ? (() => {
+        const p2complaints = (top2.specific_complaints || []).slice(0, 2);
+        return p2complaints.length > 0
+          ? `${top2.pain} (${top2.count} reviews) — ${p2complaints.map(c => `"${c}"`).join(' | ')}`
+          : `${top2.count} reviews (${top2.percentage}%) cite ${top2.pain.toLowerCase()}.`;
+      })()
+    : 'No significant secondary complaint cluster detected.';
+
   const opportunityCat = painPoints.find(p => p.starsBreakdown[2] + p.starsBreakdown[3] > 0 && p.pain !== top1.pain) || top2;
-  const improvementOpportunity = opportunityCat
-    ? `${opportunityCat.pain} is frequently highlighted in 2★ and 3★ reviews (${opportunityCat.starsBreakdown[2] + opportunityCat.starsBreakdown[3]} occurrences), representing a prime customer retention and satisfaction upgrade.`
-    : `Introducing self-service portals and automated status notifications to eliminate customer friction.`;
+  const improvementOpportunity = opportunityCat && opportunityCat.count > 0
+    ? `${opportunityCat.pain} appears in ${opportunityCat.starsBreakdown[2] + opportunityCat.starsBreakdown[3]} mid-range (2★–3★) reviews — customers are partially satisfied but blocked by a fixable gap.`
+    : 'Self-service scheduling and automated status notifications could resolve the primary friction without adding headcount.';
 
   return {
     totalReviewsAnalyzed: totalAnalyzed,
@@ -243,7 +301,7 @@ function analyzeReviewIntelligenceDataset(reviews = [], companyName = 'Company',
     executiveSummary: {
       primaryPain: top1.pain,
       primaryDetail,
-      secondaryPain: top2.pain,
+      secondaryPain: top2?.pain || 'None identified',
       secondaryDetail,
       improvementOpportunity
     }
