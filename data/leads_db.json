@@ -5,18 +5,22 @@
     "address": "901 W Ben White Blvd",
     "battlecard": {
       "problem_analysis": [
-        "No integrated client portal or dispatch system detected — customers likely call or email to book service with no real-time job status or self-serve tracking available."
+        "No unified ERP or automated client portal detected — operations rely on manual double-entry."
       ],
-      "target_offer": "Odoo Business Operations Suite: integrated CRM, Project & Field Dispatch, and Invoicing + n8n automation to replace manual spreadsheets and disconnected tools.",
-      "elevator_opener": "Hi, calling from Big Binary Tech. I actually came across some recent news on St. David's South Austin Medical Center — we noticed St. David's South Austin Medical Center has a solid patient base, but your practice management tools haven't been updated in a few years. We help clinics and medical offices replace disconnected scheduling, billing, and patient comms with a single integrated Odoo environment. Are manual scheduling gaps or billing delays costing your staff time right now?",
+      "target_offer": "Full Business Operations Modernization: Unified Odoo ERP (CRM + Job Dispatch + Automated Invoicing + Client Portal) with automated n8n workflows. Live in 30 days with zero operational downtime.",
+      "elevator_opener": "Hi, Big Binary Tech here. I noticed St. David's South Austin Medical Center's recent company announcement — congrats on the growth. We help growing medical and specialty clinics replace fragmented patient booking, intake, and invoicing with a single HIPAA-aligned Odoo platform. Are manual scheduling handoffs or billing reconciliation delays costing your admin staff hours each week?",
       "objection_handlers": [
         {
-          "objection": "\"We already use a medical billing system.\"",
-          "counter": "\"Odoo doesn't replace your billing system — it integrates with it and adds the scheduling, patient comms, and practice management layer your team is likely missing.\""
+          "objection": "\"We use QuickBooks / spreadsheets and it works fine.\"",
+          "counter": "\"QuickBooks is great for bookkeeping, but it doesn't track live field jobs, automate customer follow-up, or prevent double-entry. Odoo bridges directly into QuickBooks or replaces the manual work entirely.\""
         },
         {
-          "objection": "\"We're too busy to implement new software.\"",
-          "counter": "\"We hear that constantly from busy practices — that's why we handle the full migration while you stay operational. Most clinics see a productivity lift within two weeks of go-live.\""
+          "objection": "\"We're too busy to change software right now.\"",
+          "counter": "\"That's exactly why we designed our 30-day turnkey rollout — we handle 100% of the data migration and setup in the background so your day-to-day work never skips a beat.\""
+        },
+        {
+          "objection": "\"We don't have budget for a big IT project.\"",
+          "counter": "\"Odoo typically replaces 3 to 4 separate software subscriptions you're already paying for. Most clients see the system pay for itself in the first 60 days from admin labor savings alone.\""
         }
       ],
       "review_dossier": {
@@ -26,15 +30,32 @@
           "For a St. David's South Austin Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice.",
           "Recent headline: \"St. David’s South Austin Medical Center closes kitchen amid pest issue during construction - KVUE\" — worth referencing to open the call."
         ],
-        "top_friction": "Operational bottleneck in scheduling, dispatch, or delays",
-        "confidence_pct": 78
+        "top_friction": "Manual dispatch and unintegrated operations",
+        "confidence_pct": null
       },
       "case_study_fit": {
         "matched_case_study": "Commercial Contracting & Field Dispatch Modernization",
         "case_study_id": "case_contractor_modernization",
         "semantic_fit_pct": 50,
         "rationale": "Neural embeddings matched lead profile with 50% semantic similarity to Big Binary Tech's Commercial Contracting & Field Dispatch Modernization portfolio."
-      }
+      },
+      "vulnerability_score": 65,
+      "vulnerability_flags": [],
+      "estimated_financial_leak": "$45,000 – $80,000 / year",
+      "advisory_3step_plan": [
+        {
+          "step": "1. Technical Diagnostic Audit",
+          "action": "Run a 360° deep scan on database health, API latency, and customer intake forms to locate where leads and invoices drop."
+        },
+        {
+          "step": "2. Automated Workflow Bridge",
+          "action": "Deploy n8n webhook automation to bridge CRM, job dispatch, and accounting with zero manual double-entry."
+        },
+        {
+          "step": "3. Phased Zero-Downtime Deployment",
+          "action": "Migrate active customer records and history to unified Odoo v18 with full staff onboarding and guaranteed zero business disruption."
+        }
+      ]
     },
     "call_status": "Uncalled",
     "case_study_fit": {
@@ -64,14 +85,14 @@
             "source": "KVUE"
           },
           {
-            "title": "St. David's South Austin Medical Center first in world to enroll patient in clinical trial evaluating a next-generation treatment for aggressive large B-cell lymphoma - PR Newswire",
-            "pub_date": "Mon, 20 Apr 2026 07:00:00 GMT",
-            "source": "PR Newswire"
-          },
-          {
             "title": "St. David's breaks ground on South Austin expansion | Southwest Austin - Dripping Springs - Community Impact",
             "pub_date": "Fri, 03 Apr 2026 07:00:00 GMT",
             "source": "Community Impact"
+          },
+          {
+            "title": "St. David's South Austin Medical Center first in world to enroll patient in clinical trial evaluating a next-generation treatment for aggressive large B-cell lymphoma - PR Newswire",
+            "pub_date": "Mon, 20 Apr 2026 07:00:00 GMT",
+            "source": "PR Newswire"
           },
           {
             "title": "'Rat infestation' at Austin hospital forces kitchen closure, more cleaning - Austin American-Statesman",
@@ -90,7 +111,7 @@
       "hiring": null,
       "bbb": null,
       "corporation": null,
-      "researched_at": "2026-08-18T15:35:14.850Z"
+      "researched_at": "2026-08-18T20:22:35.564Z"
     },
     "email": "info@stdavids.com",
     "employee_size": "1-10",
@@ -106,7 +127,7 @@
       "hasLegacyCMS": false,
       "noPortal": true,
       "noSSL": false,
-      "loadTimeSec": 1.64
+      "loadTimeSec": 1.35
     },
     "fit_tier": "Solid Opportunity (Tier 2)",
     "has_odoo": false,
@@ -114,7 +135,7 @@
     "health_score": 80,
     "id": "lead_1787067315328_mfwg9f",
     "industry": "St. David's South Austin Medical Center",
-    "load_time_sec": 1.64,
+    "load_time_sec": 1.35,
     "location": "austin, tx",
     "name": "St. David's South Austin Medical Center",
     "phone": "+1 512-447-2211",
@@ -126,17 +147,19 @@
         "For a St. David's South Austin Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice.",
         "Recent headline: \"St. David’s South Austin Medical Center closes kitchen amid pest issue during construction - KVUE\" — worth referencing to open the call."
       ],
-      "top_friction": "Operational bottleneck in scheduling, dispatch, or delays",
-      "confidence_pct": 78
+      "top_friction": "Manual dispatch and unintegrated operations",
+      "confidence_pct": null
     },
     "reviews_count": null,
     "success_chance_pct": 66,
     "tech_stack": [
       "Custom HTML / Static Stack"
     ],
-    "updatedAt": "2026-08-18T15:35:15.329Z",
-    "updated_at": "2026-08-18T15:35:15.328Z",
-    "website": "https://www.stdavids.com/locations/st-davids-south-austin-medical-center?utm_campaign=corp_listings_mgmt&utm_source=google&utm_medium=business_listing"
+    "updatedAt": "2026-08-18T20:22:35.565Z",
+    "updated_at": "2026-08-18T20:22:35.564Z",
+    "website": "https://www.stdavids.com/locations/st-davids-south-austin-medical-center?utm_campaign=corp_listings_mgmt&utm_source=google&utm_medium=business_listing",
+    "last_audited_at": "2026-08-18T20:22:35.564Z",
+    "manually_enriched": true
   },
   {
     "_id": "6a847ba769e2d148cf3e06d3",
@@ -360,36 +383,59 @@
     "address": "2901 Montopolis Dr",
     "battlecard": {
       "problem_analysis": [
-        "WordPress site with no operations layer — customer requests, job scheduling, and invoicing are handled outside the website entirely, creating manual handoff friction at every step."
+        "WordPress marketing site with no backend operations bridge — customer requests and job tracking require manual double-entry across multiple disconnected tools."
       ],
-      "target_offer": "Full Platform Migration: replace legacy CMS with Odoo (CRM + Projects + Field Dispatch + Invoicing) + n8n automation layer. Live in 30 days with zero operational downtime.",
-      "elevator_opener": "Hi, calling from Big Binary Tech. I actually came across some recent news on Central Health Southeast Health & Wellness Center — we noticed Central Health Southeast Health & Wellness Center has a solid patient base, but your practice management tools haven't been updated in a few years. We help clinics and medical offices replace disconnected scheduling, billing, and patient comms with a single integrated Odoo environment. Are manual scheduling gaps or billing delays costing your staff time right now?",
+      "target_offer": "Full Business Operations Modernization: Unified Odoo ERP (CRM + Job Dispatch + Automated Invoicing + Client Portal) with automated n8n workflows. Live in 30 days with zero operational downtime.",
+      "elevator_opener": "Hi, Big Binary Tech here. I noticed Central Health Southeast Health & Wellness Center's recent company announcement — congrats on the growth. We help growing medical and specialty clinics replace fragmented patient booking, intake, and invoicing with a single HIPAA-aligned Odoo platform. Are manual scheduling handoffs or billing reconciliation delays costing your admin staff hours each week?",
       "objection_handlers": [
         {
-          "objection": "\"We already use a medical billing system.\"",
-          "counter": "\"Odoo doesn't replace your billing system — it integrates with it and adds the scheduling, patient comms, and practice management layer your team is likely missing.\""
+          "objection": "\"We use QuickBooks / spreadsheets and it works fine.\"",
+          "counter": "\"QuickBooks is great for bookkeeping, but it doesn't track live field jobs, automate customer follow-up, or prevent double-entry. Odoo bridges directly into QuickBooks or replaces the manual work entirely.\""
         },
         {
-          "objection": "\"We're too busy to implement new software.\"",
-          "counter": "\"We hear that constantly from busy practices — that's why we handle the full migration while you stay operational. Most clinics see a productivity lift within two weeks of go-live.\""
+          "objection": "\"We're too busy to change software right now.\"",
+          "counter": "\"That's exactly why we designed our 30-day turnkey rollout — we handle 100% of the data migration and setup in the background so your day-to-day work never skips a beat.\""
+        },
+        {
+          "objection": "\"We don't have budget for a big IT project.\"",
+          "counter": "\"Odoo typically replaces 3 to 4 separate software subscriptions you're already paying for. Most clients see the system pay for itself in the first 60 days from admin labor savings alone.\""
         }
       ],
       "review_dossier": {
-        "summary": "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx. Billing and invoicing in a Medical Center operation without an ERP usually means end-of-month reconciliation in spreadsheets, delayed payments, and quotes that don't match final invoices — all solvable with Odoo's accounting module. Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call.",
+        "summary": "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx. For a Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice. Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call.",
         "parts": [
           "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx.",
-          "Billing and invoicing in a Medical Center operation without an ERP usually means end-of-month reconciliation in spreadsheets, delayed payments, and quotes that don't match final invoices — all solvable with Odoo's accounting module.",
+          "For a Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice.",
           "Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call."
         ],
-        "top_friction": "Billing confusion, invoicing errors, or payment tracking issues",
-        "confidence_pct": 0
+        "top_friction": "Manual dispatch and unintegrated operations",
+        "confidence_pct": null
       },
       "case_study_fit": {
         "matched_case_study": "Commercial Contracting & Field Dispatch Modernization",
         "case_study_id": "case_contractor_modernization",
         "semantic_fit_pct": 50,
         "rationale": "Neural embeddings matched lead profile with 50% semantic similarity to Big Binary Tech's Commercial Contracting & Field Dispatch Modernization portfolio."
-      }
+      },
+      "vulnerability_score": 75,
+      "vulnerability_flags": [
+        "⚠️ Disconnected WordPress Stack: No unified operations or CRM layer"
+      ],
+      "estimated_financial_leak": "$45,000 – $80,000 / year",
+      "advisory_3step_plan": [
+        {
+          "step": "1. Technical Diagnostic Audit",
+          "action": "Run a 360° deep scan on database health, API latency, and customer intake forms to locate where leads and invoices drop."
+        },
+        {
+          "step": "2. Automated Workflow Bridge",
+          "action": "Deploy n8n webhook automation to bridge CRM, job dispatch, and accounting with zero manual double-entry."
+        },
+        {
+          "step": "3. Phased Zero-Downtime Deployment",
+          "action": "Migrate active customer records and history to unified Odoo v18 with full staff onboarding and guaranteed zero business disruption."
+        }
+      ]
     },
     "call_status": "Uncalled",
     "case_study_fit": {
@@ -445,7 +491,7 @@
       "hiring": null,
       "bbb": null,
       "corporation": null,
-      "researched_at": "2026-08-18T15:34:33.974Z"
+      "researched_at": "2026-08-18T20:23:42.272Z"
     },
     "email": "info@centralhealth.net",
     "employee_size": "1-10",
@@ -461,7 +507,7 @@
       "hasLegacyCMS": false,
       "noPortal": true,
       "noSSL": false,
-      "loadTimeSec": 1.47
+      "loadTimeSec": 1.93
     },
     "fit_tier": "Solid Opportunity (Tier 2)",
     "has_odoo": false,
@@ -469,29 +515,31 @@
     "health_score": 70,
     "id": "lead_1787067274555_id1lwv",
     "industry": "Medical Center",
-    "load_time_sec": 1.47,
+    "load_time_sec": 1.93,
     "location": "austin, tx",
     "name": "Central Health Southeast Health & Wellness Center",
     "phone": "+1 512-978-9901",
     "rating": "3.8",
     "review_dossier": {
-      "summary": "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx. Billing and invoicing in a Medical Center operation without an ERP usually means end-of-month reconciliation in spreadsheets, delayed payments, and quotes that don't match final invoices — all solvable with Odoo's accounting module. Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call.",
+      "summary": "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx. For a Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice. Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call.",
       "parts": [
         "Central Health Southeast Health & Wellness Center is an active Medical Center provider in austin, tx.",
-        "Billing and invoicing in a Medical Center operation without an ERP usually means end-of-month reconciliation in spreadsheets, delayed payments, and quotes that don't match final invoices — all solvable with Odoo's accounting module.",
+        "For a Medical Center business, dispatch coordination without a central system typically means missed appointments, phone tag with field techs, and jobs that fall through the cracks between booking and invoice.",
         "Recent headline: \"Why hasn't Texas accepted $450 million in summer EBT? - Houston Chronicle\" — worth referencing to open the call."
       ],
-      "top_friction": "Billing confusion, invoicing errors, or payment tracking issues",
-      "confidence_pct": 0
+      "top_friction": "Manual dispatch and unintegrated operations",
+      "confidence_pct": null
     },
     "reviews_count": null,
     "success_chance_pct": 68,
     "tech_stack": [
       "WordPress"
     ],
-    "updatedAt": "2026-08-18T15:34:34.573Z",
-    "updated_at": "2026-08-18T15:34:34.555Z",
-    "website": "https://www.centralhealth.net/clinical-services/locations/chsehwc/"
+    "updatedAt": "2026-08-18T20:23:42.273Z",
+    "updated_at": "2026-08-18T20:23:42.273Z",
+    "website": "https://www.centralhealth.net/clinical-services/locations/chsehwc/",
+    "last_audited_at": "2026-08-18T20:23:42.273Z",
+    "manually_enriched": true
   },
   {
     "_id": "6a847b7e69e2d148cf3e06b4",
