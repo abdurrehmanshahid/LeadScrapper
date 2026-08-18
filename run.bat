@@ -70,14 +70,37 @@ if not exist ".env" (
     echo [i] Created default .env file.
 )
 
+:: 7. Auto-tunnel via ngrok so Clay can POST enrichment callbacks back in real-time
+where ngrok >nul 2>nul
+if %errorlevel% equ 0 (
+    echo [*] ngrok detected — starting public tunnel for Clay callbacks...
+    start "" /B ngrok http 3000 >nul 2>nul
+    :: Give ngrok 4 seconds to establish the tunnel
+    timeout /t 4 /nobreak >nul
+    :: Query ngrok local API for the HTTPS public URL
+    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "(Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction SilentlyContinue).tunnels | Where-Object { $_.proto -eq 'https' } | Select-Object -First 1 -ExpandProperty public_url"`) do set "NGROK_URL=%%U"
+    if defined NGROK_URL (
+        set "APP_URL=%NGROK_URL%"
+        echo [*] Clay callback URL set: %NGROK_URL%
+        echo [*] Clay will auto-update leads in real-time via this public URL.
+    ) else (
+        echo [i] ngrok tunnel not ready — Clay callbacks will fall back to localhost.
+        echo [i] Make sure you have run: ngrok config add-authtoken YOUR_TOKEN
+    )
+) else (
+    echo [i] ngrok not found — Clay real-time auto-update disabled.
+    echo [i] Install ngrok from https://ngrok.com and add it to your PATH to enable it.
+)
+echo.
+
 echo [*] Starting Lead Intelligence Server on port 3000...
 echo [*] Opening Dashboard at: http://localhost:3000
 echo.
 
-:: 7. Launch browser after 2 seconds
+:: 8. Launch browser after 2 seconds
 start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:3000"
 
-:: 8. Start Express Server
+:: 9. Start Express Server (inherits APP_URL env var set above)
 node src/server/app.js
 
 echo.

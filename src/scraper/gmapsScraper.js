@@ -158,9 +158,16 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
 
     onProgress({ status: 'Extracted Places', message: `Found ${rawPlaces.length} real verified business listings on Google Maps.` });
 
+    // 5a. Filter out non-commercial entities (government, schools, hospitals, non-profits, etc.)
+    const commercialPlaces = rawPlaces.filter(p => !isNonCommercialEntity(p.name, p.snippet));
+    const skipped = rawPlaces.length - commercialPlaces.length;
+    if (skipped > 0) {
+      onProgress({ status: 'Filtered', message: `Skipped ${skipped} non-commercial entities (gov, schools, hospitals, non-profits).` });
+    }
+
     // 5. If some places lack a direct website, fetch the place detail panel to grab the authority URL
     let count = 0;
-    const finalCandidates = rawPlaces.slice(0, maxResults);
+    const finalCandidates = commercialPlaces.slice(0, maxResults);
 
     for (const cand of finalCandidates) {
       count++;
@@ -357,6 +364,47 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
       try { await browser.close(); } catch (e) {}
     }
   }
+}
+
+// Returns true when the listing is a government body, school, hospital, or other
+// non-commercial entity that should never appear in a B2B sales pipeline.
+function isNonCommercialEntity(name = '', snippet = '') {
+  const text = `${name} ${snippet}`.toLowerCase();
+
+  const GOV_PATTERNS = [
+    /\bcounty\b/, /\bcity of\b/, /\bmunicip/, /\bstate of\b/, /\bfederal\b/,
+    /\bdepartment of\b/, /\bpublic health\b/, /\bhealth department\b/,
+    /\bhuman services\b/, /\bhealth & human\b/, /\bhealth and human\b/,
+    /\bsocial services\b/, /\bcivil service\b/, /\bgovernment\b/,
+    /\bcourt(house)?\b/, /\bembassy\b/, /\bconsulate\b/,
+    /\bpost office\b/, /\busps\b/, /\bfire (station|department|dept)\b/,
+    /\bpolice (station|department|dept|precinct)\b/,
+    /\bsheriff\b/, /\bjail\b/, /\bprison\b/, /\bcorrections\b/,
+    /\bwater authority\b/, /\bwater district\b/, /\butility district\b/,
+    /\btransit authority\b/, /\bport authority\b/,
+  ];
+
+  const EDU_PATTERNS = [
+    /\belementary school\b/, /\bmiddle school\b/, /\bhigh school\b/,
+    /\bpublic school\b/, /\bcharter school\b/, /\bschool district\b/,
+    /\buniversity\b/, /\bcollege\b/, /\bcommunity college\b/,
+    /\bacademy\b.*\bschool\b/, /\bboard of education\b/,
+  ];
+
+  const HEALTH_PATTERNS = [
+    /\bhospital\b/, /\bmedical center\b/, /\bhealth system\b/,
+    /\bchildren'?s hospital\b/, /\bva (medical|hospital|clinic)\b/,
+    /\bveterans affairs\b/, /\bhealth authority\b/,
+  ];
+
+  const NONPROFIT_PATTERNS = [
+    /\bnonprofit\b/, /\bnon-profit\b/, /\bcharity\b/, /\bcharitable\b/,
+    /\bfood bank\b/, /\bshelter\b/, /\brescue mission\b/,
+    /\bhabitat for humanity\b/, /\bred cross\b/, /\bsalvation army\b/,
+  ];
+
+  const all = [...GOV_PATTERNS, ...EDU_PATTERNS, ...HEALTH_PATTERNS, ...NONPROFIT_PATTERNS];
+  return all.some(rx => rx.test(text));
 }
 
 // Extracts the business category from the Google Maps snippet text.
