@@ -28,13 +28,14 @@ async function launchBrowser() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
       '--disable-gpu',
       '--lang=en-US,en',
-      '--window-size=1280,900'
+      '--window-size=1366,768'
     ]
   };
 

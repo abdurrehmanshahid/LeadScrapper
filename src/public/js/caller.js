@@ -773,7 +773,9 @@ window.openLiveAuditModal = function(auditedLead) {
   // 2. Review Quotes & Friction
   const reviewContainer = document.getElementById('auditReviewQuotes');
   const intel = auditedLead.deep_intel || {};
+  const gReviews = intel.google_reviews || [];
   const yelpSnippets = intel.yelp?.yelp_review_snippets || [];
+  const allReviewSnippets = [...new Set([...gReviews, ...yelpSnippets])];
   const topFriction = auditedLead.review_dossier?.top_friction || 'Manual job coordination and spreadsheet tracking';
 
   let reviewQuotesHtml = `
@@ -782,10 +784,10 @@ window.openLiveAuditModal = function(auditedLead) {
     </div>
   `;
 
-  if (yelpSnippets.length > 0) {
-    reviewQuotesHtml += yelpSnippets.slice(0, 3).map(s => `
-      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem;">
-        "${escapeHtml(s.substring(0, 140))}..."
+  if (allReviewSnippets.length > 0) {
+    reviewQuotesHtml += allReviewSnippets.slice(0, 4).map(s => `
+      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.2); padding: 6px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem; line-height: 1.4;">
+        ${escapeHtml(s.substring(0, 180))}
       </div>
     `).join('');
   } else if (intel.news?.latest_headline) {

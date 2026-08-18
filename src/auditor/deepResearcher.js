@@ -254,7 +254,7 @@ async function searchOpenCorporates(companyName) {
 // ─── Google Maps "Lowest Rating" Review Scraper ────────────────────────────────
 
 /**
- * Scrapes Google Maps reviews filtered/sorted by "Lowest rating" to capture negative friction & complaints
+ * Scrapes Google Maps reviews filtered/sorted by "Lowest rating" using semantic text and ARIA selectors
  * @param {string} companyName
  * @param {string} location
  * @param {object} browser - Puppeteer browser instance
@@ -265,88 +265,157 @@ async function scrapeGoogleLowestReviews(companyName, location, browser) {
   let page = null;
   try {
     page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1366, height: 768 });
 
-    const cleanComp = (companyName || '').replace(/(\b(inc|llc|ltd|corp|corporation|co|group|services|company)\b\.?)/gi, '').trim();
-    const query = `${cleanComp} ${location || ''}`.trim();
-    const gmapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=en`;
+    // Clean query: strip corporate suffixes and punctuation for clean search matching
+    const cleanComp = (companyName || '').replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/(\b(inc|llc|ltd|corp|corporation|co|group|services|company)\b\.?)/gi, '').replace(/\s+/g, ' ').trim();
+    const cleanLoc = (location || '').replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const query = `${cleanComp} ${cleanLoc}`.trim();
+    const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=en`;
 
-    await page.goto(gmapsUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 1. If search result list, click first place
-    const placeLink = await page.$('div.Nv2pk a, a[href*="/maps/place/"]');
-    if (placeLink) {
-      await placeLink.click().catch(() => {});
-      await new Promise(r => setTimeout(r, 2500));
-    }
-
-    // 2. Click to open Reviews tab
+    // 1. Open the Place card if in search list
     await page.evaluate(() => {
-      const starBtn = document.querySelector('div.F7nice, button.HH2rDe, span.ceNzKf, button[aria-label*="reviews" i]');
-      if (starBtn) starBtn.click();
+      const placeLinks = Array.from(document.querySelectorAll('a[href*="/maps/place/"], [role="feed"] a, [role="article"] a'));
+      if (placeLinks.length > 0) {
+        placeLinks[0].click();
+      }
+    });
+    await new Promise(r => setTimeout(r, 2500));
+
+    // 2. Open the Reviews panel (Semantic ARIA / text matching)
+    await page.evaluate(() => {
+      const allButtons = Array.from(document.querySelectorAll('button, div[role="tab"], div[role="button"], span'));
+      const revBtn = allButtons.find(b => {
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        return (txt.includes('review') || aria.includes('review') || aria.includes('rating') || aria.includes('stars')) && !txt.includes('write');
+      });
+      if (revBtn) revBtn.click();
     });
     await new Promise(r => setTimeout(r, 2000));
 
-    // 3. Click "Lowest rating" filter chip or Sort -> Lowest
-    await page.evaluate(() => {
-      const all = Array.from(document.querySelectorAll('button, div[role="radio"], div[role="button"], span'));
-      const lowestChip = all.find(el => {
-        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+    // 3. Find and click the reviews sort button / chip
+    const sortOpened = await page.evaluate(() => {
+      const allButtons = Array.from(document.querySelectorAll('button, div[role="radio"], div[role="button"], span'));
+      
+      // Check if "Lowest rating" chip is already visible on screen
+      const lowestDirect = allButtons.find(b => {
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
         return txt === 'lowest rating' || aria.includes('lowest rating') || txt.includes('lowest');
       });
-      if (lowestChip) {
-        lowestChip.click();
-        return;
+      if (lowestDirect) {
+        lowestDirect.click();
+        return 'chip_clicked';
       }
-      const sortBtn = all.find(el => {
-        const txt = (el.innerText || '').toLowerCase();
-        return txt.includes('sort');
+
+      // Find sort button via ARIA label, title, or text containing "Sort"
+      const sortBtn = allButtons.find(b => {
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        const title = (b.getAttribute('title') || '').toLowerCase();
+        return txt.includes('sort') || aria.includes('sort') || title.includes('sort');
       });
-      if (sortBtn) sortBtn.click();
-    });
-    await new Promise(r => setTimeout(r, 1500));
 
-    // 4. Click Lowest in dropdown if menu opened
+      if (sortBtn) {
+        sortBtn.click();
+        return 'sort_opened';
+      }
+      return 'not_found';
+    });
+
+    // 4. Select "Lowest rating" from the sort menu
+    if (sortOpened === 'sort_opened') {
+      await new Promise(r => setTimeout(r, 1200));
+      await page.evaluate(() => {
+        const menuItems = Array.from(document.querySelectorAll('[role="menu"] [role="menuitemradio"], [role="menuitem"], [role="radiogroup"] div, div[role="radio"], div'));
+        const lowest = menuItems.find(m => {
+          const txt = (m.innerText || m.textContent || '').trim().toLowerCase();
+          const aria = (m.getAttribute('aria-label') || '').toLowerCase();
+          return txt.includes('lowest') || aria.includes('lowest');
+        });
+        if (lowest) lowest.click();
+      });
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // 5. Scroll through the review container to load reviews
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => {
+        const scrollables = Array.from(document.querySelectorAll('div[role="main"], div[tabindex="-1"], div'));
+        const container = scrollables.find(el => el.scrollHeight > 1000 && el.clientHeight > 200);
+        if (container) container.scrollTop += 2500;
+      });
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    // 6. Expand all "See more" / "More" text buttons
     await page.evaluate(() => {
-      const menuItems = Array.from(document.querySelectorAll('div[role="menuitemradio"], div[role="menuitem"], div.fxNQSb'));
-      const lowest = menuItems.find(m => (m.innerText || '').toLowerCase().includes('lowest'));
-      if (lowest) lowest.click();
-    });
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 5. Expand text
-    await page.evaluate(() => {
-      document.querySelectorAll('button.w8nwRe, button[aria-label*="more" i], button.MtNkCe').forEach(b => b.click());
-    });
-    await new Promise(r => setTimeout(r, 500));
-
-    // 6. Extract all negative review snippets
-    const snippets = await page.evaluate(() => {
-      const texts = [];
-      document.querySelectorAll('div.jftiEf, div.GHT2ce, div[data-review-id], div.MyEnff, span.wiI7m').forEach(card => {
-        const textEl = card.querySelector('span.wiI7m, div.MyEnff, .wiI7m') || card;
-        const authorEl = card.querySelector('div.d4r55, div.TSUbDb, button[aria-label*="profile" i]');
-        const starsEl = card.querySelector('span.kvMYJc, span[aria-label*="star" i]');
-
-        const t = (textEl.innerText || textEl.textContent || '').trim();
-        const author = authorEl ? (authorEl.innerText || '').trim() : 'Customer';
-        const starsText = starsEl ? starsEl.getAttribute('aria-label') || '' : '';
-        const starMatch = starsText.match(/(\d+)/);
-        const stars = starMatch ? parseInt(starMatch[1], 10) : null;
-
-        if (t.length > 20 && !t.includes('Google') && !t.includes('Translate') && !t.includes('Write a review')) {
-          const starPrefix = stars ? `[${stars}★ - ${author}]: ` : '';
-          texts.push(`${starPrefix}${t}`);
+      const allButtons = Array.from(document.querySelectorAll('button, span'));
+      allButtons.forEach(b => {
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        if (txt === 'more' || txt === 'see more' || aria.includes('see more')) {
+          b.click();
         }
       });
-      return texts;
+    });
+    await new Promise(r => setTimeout(r, 400));
+
+    // 7. Extract reviews, rating, author, and text
+    const snippets = await page.evaluate(() => {
+      const results = [];
+      const seen = new Set();
+      
+      const allCards = Array.from(document.querySelectorAll('div[data-review-id], div[role="article"], div'));
+      const reviewCards = allCards.filter(c => c.getAttribute('data-review-id') || (c.innerText && c.innerText.includes('★') && c.innerText.length > 50) || c.querySelector('[aria-label*="star" i]'));
+
+      reviewCards.forEach(card => {
+        const starEl = card.querySelector('[aria-label*="star" i], [aria-label*="stars" i]');
+        const starAria = starEl ? starEl.getAttribute('aria-label') || '' : '';
+        const starMatch = starAria.match(/(\d+)/);
+        const stars = starMatch ? parseInt(starMatch[1], 10) : (card.innerText.includes('1 star') ? 1 : 1);
+
+        const authorEl = card.querySelector('button[aria-label*="profile" i], h3, [class*="title"], [class*="author"]');
+        const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : 'Patient / Customer';
+
+        let fullText = (card.innerText || card.textContent || '').trim();
+        if (fullText.includes('Response from the owner')) {
+          fullText = fullText.split('Response from the owner')[0].trim();
+        }
+
+        const lines = fullText.split('\n').map(l => l.trim()).filter(l => 
+          l.length > 15 && 
+          !l.includes('Share') && 
+          !l.includes('Like') && 
+          !l.includes('Local Guide') && 
+          !l.includes('reviews') && 
+          !l.includes('photo') && 
+          !l.includes('ago') &&
+          !l.includes('★')
+        );
+
+        const body = lines.join(' ').trim();
+        if (body.length > 20) {
+          const key = body.substring(0, 40).toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push(`[${stars}★ - ${author}]: "${body}"`);
+          }
+        }
+      });
+
+      return results;
     });
 
+    console.log(`[GMB Lowest Hunter] Discovered ${snippets.length} negative reviews for ${companyName}`);
     return snippets;
   } catch (err) {
-    console.warn(`[GMB Review Hunter] Error for ${companyName}:`, err.message);
+    console.warn(`[GMB Lowest Hunter] Error for ${companyName}:`, err.message);
     return [];
   } finally {
     if (page) try { await page.close(); } catch (_) {}
