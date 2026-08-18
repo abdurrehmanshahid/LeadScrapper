@@ -130,10 +130,14 @@ function generateReviewDossier(lead, nliResult) {
   const name = lead.name || 'This company';
   const industry = lead.industry || 'local operations';
   const intel = lead.deep_intel || {};
-  const topFriction = nliResult.top_friction;
+
+  const yelpSnippets = intel.yelp?.yelp_review_snippets || [];
+  if (!nliResult) {
+    nliResult = analyzeFrictionWithNLI(yelpSnippets, industry);
+  }
+  const topFriction = nliResult?.top_friction || 'Manual dispatch and unintegrated operations';
 
   // Pull every available signal
-  const yelpSnippets = intel.yelp?.yelp_review_snippets || [];
   const yelpRating = intel.yelp?.yelp_rating;
   const yelpCount = intel.yelp?.yelp_review_count;
   const googleRating = lead.rating;

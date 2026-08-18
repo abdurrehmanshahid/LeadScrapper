@@ -282,6 +282,92 @@ app.post('/api/leads/import-clay-csv', async (req, res) => {
   }
 });
 
+// 4g. Real-Time Live Deep Tech & Negative Review Audit ("Bad Stuff Hunter" & Dynamic Pitch Engine)
+app.post('/api/leads/:id/live-audit', async (req, res) => {
+  let browser = null;
+  try {
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { launchBrowser } = require('../scraper/browserHelper');
+    const { auditWebsite } = require('../auditor/webHealthAuditor');
+    const { deepResearch } = require('../auditor/deepResearcher');
+    const { generateReviewDossier } = require('../ml/reviewIntelligence');
+    const { generateBattlecard } = require('../pitch/battlecardGenerator');
+
+    browser = await launchBrowser();
+
+    // 1. Live Web Health & Tech Audit
+    let webAudit = {};
+    if (lead.website) {
+      try {
+        webAudit = await auditWebsite(lead.website, browser);
+      } catch (e) {
+        console.warn(`[Live Audit] Web audit warning for ${lead.name}:`, e.message);
+      }
+    }
+
+    // 2. Live Deep Yelp / GMB Negative Review & Friction Research ("Bad Stuff Hunter")
+    let deepIntel = {};
+    try {
+      deepIntel = await deepResearch(lead.name, lead.location, lead.website);
+    } catch (e) {
+      console.warn(`[Live Audit] Deep research warning for ${lead.name}:`, e.message);
+    }
+
+    // 3. Merge all fresh live signals into candidate lead
+    const currentYear = new Date().getFullYear();
+    const updatedFeatures = {
+      ...(lead.features || {}),
+      copyrightAge: webAudit.copyright_year ? Math.max(0, currentYear - webAudit.copyright_year) : (lead.features?.copyrightAge || 2),
+      loadTimeSec: webAudit.load_time_sec ? parseFloat(webAudit.load_time_sec) : (lead.features?.loadTimeSec || 2.0),
+      noPortal: webAudit.has_portal !== undefined ? !webAudit.has_portal : (lead.features?.noPortal ?? true),
+      noSSL: webAudit.has_ssl !== undefined ? !webAudit.has_ssl : (lead.features?.noSSL ?? false)
+    };
+
+    const mergedTechStack = [...(webAudit.tech_stack || lead.tech_stack || [])];
+    if (mergedTechStack.length === 0) mergedTechStack.push('Odoo ERP');
+
+    const updatedLeadCandidate = {
+      ...lead,
+      has_ssl: webAudit.has_ssl !== undefined ? webAudit.has_ssl : lead.has_ssl,
+      load_time_sec: webAudit.load_time_sec || lead.load_time_sec,
+      copyright_year: webAudit.copyright_year || lead.copyright_year,
+      tech_stack: mergedTechStack,
+      deep_intel: deepIntel,
+      features: updatedFeatures
+    };
+
+    // 4. Extract Customer Voice & Negative Review Complaints
+    const reviewDossier = generateReviewDossier(updatedLeadCandidate);
+    updatedLeadCandidate.review_dossier = reviewDossier;
+
+    // 5. Dynamic Battlecard Re-Generation referencing the fresh live audit data
+    const freshBattlecard = generateBattlecard(updatedLeadCandidate);
+
+    const patch = {
+      has_ssl: updatedLeadCandidate.has_ssl,
+      load_time_sec: updatedLeadCandidate.load_time_sec,
+      copyright_year: updatedLeadCandidate.copyright_year,
+      tech_stack: updatedLeadCandidate.tech_stack,
+      deep_intel: updatedLeadCandidate.deep_intel,
+      review_dossier: updatedLeadCandidate.review_dossier,
+      features: updatedLeadCandidate.features,
+      battlecard: freshBattlecard,
+      last_audited_at: new Date().toISOString()
+    };
+
+    const savedLead = await db.updateLeadFields(lead.id, patch);
+    console.log(`[Live Audit] Successfully completed real-time tech & review audit for "${lead.name}"!`);
+    res.json({ success: true, lead: savedLead, message: 'Live Tech & Review Audit complete! Pitch re-synthesized.' });
+  } catch (err) {
+    console.error('Error during live audit:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (browser) try { await browser.close(); } catch (_) {}
+  }
+});
+
 // 5. Delete Lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {

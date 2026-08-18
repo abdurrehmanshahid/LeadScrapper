@@ -62,7 +62,8 @@
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
               <span id="callCategoryBadge" class="badge badge-new">NEW_IMPLEMENTATION</span>
               <span id="callScorePill" class="score-pill score-high">🎯 88% Success Chance</span>
-              <button onclick="openEditModal()" class="btn btn-accent btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem; cursor: pointer;">✏️ Edit Company & Pitch</button>
+              <button id="callerLiveAuditBtn" onclick="runCallerLiveAudit()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #f59e0b; border-color: rgba(245,158,11,0.5); cursor: pointer;" title="Crawls live website & negative customer reviews right now and re-synthesizes the pitch">⚡ Live Tech & Review Audit</button>
+              <button onclick="openEditModal()" class="btn btn-accent btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; cursor: pointer;">✏️ Edit</button>
               <button id="callerAiEnrichBtn" onclick="runCallerAiEnrich()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #a78bfa; border-color: rgba(167,139,250,0.4); cursor: pointer;">✨ AI Auto-Enrich</button>
               <button id="callerClayBtn" onclick="pushCallerLeadToClay()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #60a5fa; border-color: rgba(96,165,250,0.4); cursor: pointer;">🧊 Push to Clay</button>
             </div>

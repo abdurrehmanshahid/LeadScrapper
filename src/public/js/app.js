@@ -111,7 +111,7 @@ function renderLeadsTable(leads = allLeads) {
       : `${lead.employee_size || '11-50'} staff`;
 
     return `
-      <tr>
+      <tr onclick="window.location.href='caller.html?id=${lead.id}'" style="cursor: pointer;" title="📞 Click to open direct SDR Caller View">
         <td>
           <div style="font-weight: 700; color: #f9fafb; font-size: 0.95rem;">${escapeHtml(lead.name)}</div>
           <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(lead.employee_size || '11-50')} staff | ${ratingDisplay}</div>
@@ -125,7 +125,7 @@ function renderLeadsTable(leads = allLeads) {
         <td>
           <div style="font-weight: 600; color: #818cf8;">${escapeHtml(lead.phone || 'No Phone')}</div>
           <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 1px;">${escapeHtml(lead.email || '')}</div>
-          <a href="${escapeHtml(lead.website)}" target="_blank" style="font-size: 0.75rem; color: #38bdf8; text-decoration: none;">
+          <a href="${escapeHtml(lead.website)}" target="_blank" onclick="event.stopPropagation();" style="font-size: 0.75rem; color: #38bdf8; text-decoration: none;">
             ${escapeHtml(lead.website ? lead.website.replace(/^https?:\/\//, '').split('/')[0] : '')} ↗
           </a>
         </td>
@@ -138,14 +138,14 @@ function renderLeadsTable(leads = allLeads) {
             ● ${escapeHtml(lead.call_status || 'Uncalled')}
           </span>
         </td>
-        <td style="white-space: nowrap;">
-          <button class="btn btn-secondary btn-sm" onclick="openLeadModal('${lead.id}')" style="margin-right: 4px;" title="View battlecard & intelligence">
+        <td style="white-space: nowrap;" onclick="event.stopPropagation();">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openLeadModal('${lead.id}')" style="margin-right: 4px;" title="View battlecard & intelligence">
             📋 Battlecard
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="editLeadDirect('${lead.id}')" style="margin-right: 4px; color: #38bdf8; border-color: rgba(56,189,248,0.4);" title="Edit company details & pitch">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editLeadDirect('${lead.id}')" style="margin-right: 4px; color: #38bdf8; border-color: rgba(56,189,248,0.4);" title="Edit company details & pitch">
             ✏️ Edit
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="deleteLead('${lead.id}')" style="color: #fb7185; border-color: rgba(251,113,133,0.3);" title="Delete this lead">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); deleteLead('${lead.id}')" style="color: #fb7185; border-color: rgba(251,113,133,0.3);" title="Delete this lead">
             🗑️
           </button>
         </td>

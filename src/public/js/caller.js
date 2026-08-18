@@ -698,6 +698,36 @@ window.runCallerAiEnrich = async function() {
   }
 };
 
+window.runCallerLiveAudit = async function() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const btn = document.getElementById('callerLiveAuditBtn');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.innerHTML = '⏳ Auditing Tech & Reviews...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch(`/api/leads/${lead.id}/live-audit`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Live audit failed');
+
+    // Update lead in memory with newly crawled signals & fresh pitch
+    Object.assign(lead, data.lead);
+    renderActiveLead();
+    showToast(`⚡ Live Tech & Review Audit complete! Pitch re-synthesized for "${lead.name}".`);
+  } catch (err) {
+    showToast(`Live Audit error: ${err.message}`, false);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+};
+
 window.pushCallerLeadToClay = async function() {
   const lead = callerLeads[currentIndex];
   if (!lead) return;

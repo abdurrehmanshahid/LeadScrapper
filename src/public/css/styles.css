@@ -370,8 +370,16 @@ body {
   color: #f1f5f9;
 }
 
-.leads-table tr:hover td {
-  background: var(--bg-card-hover);
+.leads-table tbody tr {
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.leads-table tbody tr:hover td {
+  background: rgba(30, 41, 59, 0.75);
+}
+
+.leads-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 #6366f1;
 }
 
 /* Badges */
