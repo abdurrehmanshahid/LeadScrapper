@@ -251,18 +251,18 @@ async function searchOpenCorporates(companyName) {
   };
 }
 
-// ─── Google Maps "Lowest Rating" Review Dataset Scraper ─────────────────────────
+// ─── Dual-Engine Lowest Reviews Dataset Scraper ───────────────────────────────
 
 /**
- * Scrapes Google Maps reviews filtered by "Lowest rating", exhaustively scrolling the container
- * to extract structured review objects: { rating, reviewer, date, text }.
+ * Scrapes Google Maps reviews filtered by "Lowest rating" using Puppeteer with semantic ARIA sort
+ * and exhaustive container scrolling.
  *
  * @param {string} companyName
  * @param {string} location
  * @param {object} browser - Puppeteer browser instance
  * @returns {Promise<Array<{ rating: number, reviewer: string, date: string, text: string }>>}
  */
-async function scrapeGoogleReviewsDataset(companyName, location, browser) {
+async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
   if (!browser) return [];
   let page = null;
   try {
@@ -279,7 +279,7 @@ async function scrapeGoogleReviewsDataset(companyName, location, browser) {
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 1. Open Place card if search results feed
+    // 1. Open Place card if in search list
     await page.evaluate(() => {
       const placeLinks = Array.from(document.querySelectorAll('a[href*="/maps/place/"], [role="feed"] a, [role="article"] a'));
       if (placeLinks.length > 0) placeLinks[0].click();
@@ -341,26 +341,14 @@ async function scrapeGoogleReviewsDataset(companyName, location, browser) {
       await new Promise(r => setTimeout(r, 2000));
     }
 
-    // 5. Exhaustively scroll through review container until no new reviews appear or max 8 scrolls
-    let prevReviewCount = 0;
-    let stableCountRounds = 0;
-
-    for (let scroll = 0; scroll < 8; scroll++) {
-      const currentCount = await page.evaluate(() => {
+    // 5. Scroll through the review container to load reviews
+    for (let scroll = 0; scroll < 4; scroll++) {
+      await page.evaluate(() => {
         const scrollables = Array.from(document.querySelectorAll('div[role="main"], div[tabindex="-1"], div'));
         const container = scrollables.find(el => el.scrollHeight > 1000 && el.clientHeight > 200);
         if (container) container.scrollTop += 3500;
-        return document.querySelectorAll('div[data-review-id], div[role="article"]').length;
       });
-
-      if (currentCount === prevReviewCount && currentCount > 0) {
-        stableCountRounds++;
-        if (stableCountRounds >= 2) break; // Exhausted dataset
-      } else {
-        stableCountRounds = 0;
-        prevReviewCount = currentCount;
-      }
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, 600));
     }
 
     // 6. Expand all "See more" / "More" text buttons
@@ -430,14 +418,72 @@ async function scrapeGoogleReviewsDataset(companyName, location, browser) {
       return results;
     });
 
-    console.log(`[GMB Lowest Dataset Hunter] Discovered ${structuredReviews.length} structured reviews for ${companyName}`);
+    console.log(`[Google Maps Review Scraper] Discovered ${structuredReviews.length} reviews for ${companyName}`);
     return structuredReviews;
   } catch (err) {
-    console.warn(`[GMB Lowest Hunter] Error for ${companyName}:`, err.message);
+    console.warn(`[Google Maps Review Scraper] Error for ${companyName}:`, err.message);
     return [];
   } finally {
     if (page) try { await page.close(); } catch (_) {}
   }
+}
+
+/**
+ * Fast HTTP fallback parser for Yelp, Trustpilot, and DuckDuckGo complaint snippets
+ */
+async function scrapeHttpReviewsDataset(companyName, location, website) {
+  const reviews = [];
+
+  // Source 1: Yelp
+  try {
+    const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(companyName)}&find_loc=${encodeURIComponent(location || '')}`;
+    const searchResp = await axios.get(searchUrl, { headers: HEADERS, timeout: 10000 });
+    const $s = cheerio.load(searchResp.data);
+
+    let bizUrl = null;
+    $s('a[href*="/biz/"]').each((_, el) => {
+      const href = $s(el).attr('href') || '';
+      if (/^\/biz\/[a-z0-9-]+$/i.test(href.split('?')[0])) {
+        bizUrl = `https://www.yelp.com${href.split('?')[0]}`;
+        return false;
+      }
+    });
+
+    if (bizUrl) {
+      const { data } = await axios.get(`${bizUrl}?sort_by=rating_asc`, { headers: HEADERS, timeout: 10000 });
+      const $ = cheerio.load(data);
+      $('script[type="application/ld+json"]').each((_, el) => {
+        try {
+          const json = JSON.parse($(el).html());
+          const items = Array.isArray(json) ? json : [json];
+          items.forEach(obj => {
+            (obj.review || []).forEach(r => {
+              const text = (r.reviewBody || r.description || '').trim();
+              const rating = parseInt(r.reviewRating?.ratingValue || 5);
+              if (text.length > 20) reviews.push({ rating, text, reviewer: r.author?.name || 'Customer', date: r.datePublished || 'Recent' });
+            });
+          });
+        } catch (_) {}
+      });
+    }
+  } catch (_) {}
+
+  // Source 2: DuckDuckGo Complaint Snippets
+  if (reviews.length === 0) {
+    try {
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`"${companyName}" ${location || ''} reviews complaints`)}`;
+      const { data } = await axios.get(ddgUrl, { headers: HEADERS, timeout: 10000 });
+      const $d = cheerio.load(data);
+      $d('.result__snippet').each((_, el) => {
+        const text = $d(el).text().trim();
+        if (text.length > 40 && !/^(www\.|https?:\/\/)/.test(text)) {
+          reviews.push({ rating: 1, text: text.substring(0, 300), reviewer: 'Customer', date: 'Recent' });
+        }
+      });
+    } catch (_) {}
+  }
+
+  return reviews.filter(r => r.rating <= 3);
 }
 
 // ─── Main Orchestrator ─────────────────────────────────────────────────────────
@@ -458,11 +504,20 @@ async function deepResearch(companyName, location, website, browser) {
     searchJobPostings(companyName, website),
     searchBBB(companyName, location),
     searchOpenCorporates(companyName),
-    browser ? scrapeGoogleReviewsDataset(companyName, location, browser) : Promise.resolve([])
+    browser 
+      ? scrapeGoogleMapsLowestReviews(companyName, location, browser) 
+      : scrapeHttpReviewsDataset(companyName, location, website)
   ]);
 
   const yelpData = yelp.status === 'fulfilled' ? yelp.value : null;
-  const structuredGmb = gmbReviews.status === 'fulfilled' ? (gmbReviews.value || []) : [];
+  let structuredGmb = gmbReviews.status === 'fulfilled' ? (gmbReviews.value || []) : [];
+
+  // If Puppeteer didn't find reviews, run HTTP fallback
+  if (structuredGmb.length === 0) {
+    try {
+      structuredGmb = await scrapeHttpReviewsDataset(companyName, location, website);
+    } catch (_) {}
+  }
 
   // Convert structured GMB reviews into quoted strings for NLP compatibility
   const gmbFormattedQuotes = structuredGmb.map(r => `[${r.rating}★ - ${r.reviewer}]: "${r.text}"`);
@@ -493,4 +548,4 @@ async function deepResearch(companyName, location, website, browser) {
   };
 }
 
-module.exports = { deepResearch, scrapeGoogleReviewsDataset };
+module.exports = { deepResearch, scrapeGoogleMapsLowestReviews, scrapeHttpReviewsDataset };

@@ -310,7 +310,7 @@ app.post('/api/leads/:id/live-audit', async (req, res) => {
     // 2. Live Deep Yelp / GMB Negative Review & Friction Research ("Bad Stuff Hunter")
     let deepIntel = {};
     try {
-      deepIntel = await deepResearch(lead.name, lead.location, lead.website, browser);
+      deepIntel = await deepResearch(lead.name, lead.location, lead.website, browser, lead.place_url);
     } catch (e) {
       console.warn(`[Live Audit] Deep research warning for ${lead.name}:`, e.message);
     }
