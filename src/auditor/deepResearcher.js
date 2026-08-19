@@ -254,20 +254,24 @@ async function searchOpenCorporates(companyName) {
 // ─── Dual-Engine Lowest Reviews Dataset Scraper ───────────────────────────────
 
 /**
- * Scrapes Google Maps reviews filtered by "Lowest rating" using Puppeteer with semantic ARIA sort
- * and exhaustive container scrolling.
- *
- * @param {string} companyName
- * @param {string} location
- * @param {object} browser - Puppeteer browser instance
- * @returns {Promise<Array<{ rating: number, reviewer: string, date: string, text: string }>>}
+ * Scrapes Google Maps reviews filtered by "Lowest rating" using Puppeteer with semantic ARIA sort,
+ * true step-by-step infinite scroll (loading 20-50 reviews), and strict data-review-id targeting.
  */
 async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
   if (!browser) return [];
   let page = null;
   try {
     page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+
+    // Anti-bot bypass: eliminate navigator.webdriver and mask headless Chrome
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      window.chrome = { runtime: {}, app: {}, csi: () => {}, loadTimes: () => {} };
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    });
+
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1366, height: 768 });
 
     // Clean query: strip corporate suffixes and punctuation for clean search matching
@@ -279,14 +283,14 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 1. Open Place card if in search list
+    // 1. Open Place card if search results feed
     await page.evaluate(() => {
       const placeLinks = Array.from(document.querySelectorAll('a[href*="/maps/place/"], [role="feed"] a, [role="article"] a'));
       if (placeLinks.length > 0) placeLinks[0].click();
     });
     await new Promise(r => setTimeout(r, 2500));
 
-    // 2. Open Reviews panel (Semantic ARIA / text matching)
+    // 2. Open Reviews panel (Semantic ARIA / text matching / tab button)
     await page.evaluate(() => {
       const allButtons = Array.from(document.querySelectorAll('button, div[role="tab"], div[role="button"], span'));
       const revBtn = allButtons.find(b => {
@@ -338,69 +342,77 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
         });
         if (lowest) lowest.click();
       });
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 2200));
     }
 
-    // 5. Scroll through the review container to load reviews
-    for (let scroll = 0; scroll < 4; scroll++) {
-      await page.evaluate(() => {
-        const scrollables = Array.from(document.querySelectorAll('div[role="main"], div[tabindex="-1"], div'));
-        const container = scrollables.find(el => el.scrollHeight > 1000 && el.clientHeight > 200);
-        if (container) container.scrollTop += 3500;
+    // 5. True Step-by-Step Infinite Scroll (Targeting 20–50 lowest reviews)
+    let prevCount = 0;
+    let stableRounds = 0;
+
+    for (let scrollRound = 0; scrollRound < 10; scrollRound++) {
+      const currentCardsCount = await page.evaluate(() => {
+        const cards = document.querySelectorAll('div[data-review-id], div.jftiEf');
+        if (cards.length > 0) {
+          cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          const scrollables = Array.from(document.querySelectorAll('div[role="main"], div[tabindex="-1"], div'));
+          const container = scrollables.find(el => el.scrollHeight > 1000 && el.clientHeight > 200);
+          if (container) container.scrollTop += 3000;
+        }
+        return cards.length;
       });
-      await new Promise(r => setTimeout(r, 600));
+
+      if (currentCardsCount >= 35) break; // Target reached
+
+      if (currentCardsCount === prevCount && currentCardsCount > 0) {
+        stableRounds++;
+        if (stableRounds >= 3) break;
+      } else {
+        stableRounds = 0;
+        prevCount = currentCardsCount;
+      }
+
+      await new Promise(r => setTimeout(r, 1000));
     }
 
-    // 6. Expand all "See more" / "More" text buttons
+    // 6. Expand all "See more" / "More" text buttons to get full verbatim complaints
     await page.evaluate(() => {
       const allButtons = Array.from(document.querySelectorAll('button, span'));
       allButtons.forEach(b => {
         const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
         const aria = (b.getAttribute('aria-label') || '').toLowerCase();
         if (txt === 'more' || txt === 'see more' || aria.includes('see more')) {
-          b.click();
+          try { b.click(); } catch (_) {}
         }
       });
     });
     await new Promise(r => setTimeout(r, 400));
 
-    // 7. Extract structured review objects strictly from review cards
+    // 7. Precision Extraction from data-review-id / jftiEf nodes
     const structuredReviews = await page.evaluate((compName) => {
       const results = [];
       const seen = new Set();
       const cleanCompName = (compName || '').toLowerCase().trim();
       
-      // Target specific review cards only — never generic parent containers or place headers
-      let reviewCards = Array.from(document.querySelectorAll('div[data-review-id]'));
-      if (reviewCards.length === 0) {
-        reviewCards = Array.from(document.querySelectorAll('div[role="article"]')).filter(el => 
-          el.querySelector('[aria-label*="star" i], [aria-label*="stars" i]') &&
-          !el.querySelector('h1') // exclude place title header
-        );
-      }
+      const reviewCards = Array.from(document.querySelectorAll('div[data-review-id], div.jftiEf'));
 
       reviewCards.forEach(card => {
-        // Star rating
         const starEl = card.querySelector('[aria-label*="star" i], [aria-label*="stars" i]');
         const starAria = starEl ? (starEl.getAttribute('aria-label') || '') : '';
         const starMatch = starAria.match(/(\d+)/);
         const stars = starMatch ? parseInt(starMatch[1], 10) : 1;
 
-        // Author name
-        const authorEl = card.querySelector('button[aria-label*="profile" i], [class*="d4r55"], h3, [class*="title"]');
+        const authorEl = card.querySelector('button[aria-label*="profile" i], [class*="d4r55"], h3, [class*="title"], [class*="author"]');
         const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : 'Customer';
 
-        // Date
         const dateEl = card.querySelector('[class*="rsqaWe"], [class*="dehysf"], [class*="date"], [class*="time"]');
         const date = dateEl ? (dateEl.innerText || dateEl.textContent || '').trim() : 'Recent';
 
-        // Review Text: look for the dedicated review text span or container
         let reviewText = '';
         const textSpan = card.querySelector('span[class*="wiI7m"], span[class*="MyEned"], [class*="review-text"], [data-expandable-section]');
         if (textSpan) {
           reviewText = (textSpan.innerText || textSpan.textContent || '').trim();
         } else {
-          // Fallback: extract from card innerText excluding headers, owner responses, and metadata
           let fullText = (card.innerText || card.textContent || '').trim();
           if (fullText.includes('Response from the owner')) {
             fullText = fullText.split('Response from the owner')[0].trim();
@@ -414,24 +426,16 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
             !l.includes('photo') && 
             !l.includes('ago') &&
             !l.includes('★') &&
-            !l.includes('·') &&
-            !l.includes('Verified') &&
-            !l.toLowerCase().includes('medical clinic') &&
-            !l.toLowerCase().includes('open') &&
-            !l.toLowerCase().includes('closed')
+            !l.includes('·')
           );
           reviewText = lines.join(' ').trim();
         }
 
-        // Clean out any quotes and trim
         reviewText = reviewText.replace(/^["']|["']$/g, '').trim();
 
-        // Validation: must be a real sentence and NOT just the company name or address
         const isAddressOrHeader = reviewText.toLowerCase() === cleanCompName ||
-          reviewText.match(/^\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i) ||
-          (reviewText.length < 25 && reviewText.toLowerCase().includes(cleanCompName));
+          reviewText.match(/^\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i);
 
-        // Must contain common conversational words
         const hasWords = /\b(the|and|was|were|they|them|i|we|my|our|to|for|at|in|service|doctor|nurse|clinic|appointment|time|staff|called|told|rude|wait|bill|never|bad|good|hours)\b/i.test(reviewText);
 
         if (reviewText.length >= 25 && !isAddressOrHeader && hasWords) {
@@ -451,10 +455,10 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
       return results;
     }, companyName);
 
-    console.log(`[Google Maps Review Scraper] Extracted ${structuredReviews.length} verified review comments for ${companyName}`);
+    console.log(`[Google Maps Lowest Review Scraper] Successfully extracted ${structuredReviews.length} lowest-rating review comments for ${companyName}`);
     return structuredReviews;
   } catch (err) {
-    console.warn(`[Google Maps Review Scraper] Error for ${companyName}:`, err.message);
+    console.warn(`[Google Maps Lowest Review Scraper] Error for ${companyName}:`, err.message);
     return [];
   } finally {
     if (page) try { await page.close(); } catch (_) {}
