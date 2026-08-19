@@ -809,8 +809,21 @@ window.openLiveAuditModal = function(auditedLead) {
     // 1★ / 2★ / 3★ Breakdown Matrix Table
     let tableRows = report.painPoints.map(p => {
       const sevColor = p.severity === 'high' ? '#f43f5e' : p.severity === 'medium' ? '#fbbf24' : '#34d399';
+      const complaintsHtml = (p.specific_complaints || []).length > 0
+        ? `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td colspan="6" style="padding: 2px 6px 8px 18px;">
+              <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px;">
+                ${(p.specific_complaints || []).slice(0, 3).map(c =>
+                  `<li style="font-size: 0.72rem; color: #94a3b8; line-height: 1.35;">
+                    <span style="color: #f87171; margin-right: 4px;">›</span>${escapeHtml(c)}
+                  </li>`
+                ).join('')}
+              </ul>
+            </td>
+          </tr>`
+        : '';
       return `
-        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.75rem;">
+        <tr style="border-bottom: ${complaintsHtml ? 'none' : '1px solid rgba(255,255,255,0.05)'}; font-size: 0.75rem;">
           <td style="padding: 4px 6px; font-weight: 600; color: #e2e8f0;">${escapeHtml(p.pain)}</td>
           <td style="padding: 4px 6px; text-align: center; color: #f87171; font-weight: 700;">${p.starsBreakdown[1]}</td>
           <td style="padding: 4px 6px; text-align: center; color: #fbbf24; font-weight: 700;">${p.starsBreakdown[2]}</td>
@@ -822,6 +835,7 @@ window.openLiveAuditModal = function(auditedLead) {
             </span>
           </td>
         </tr>
+        ${complaintsHtml}
       `;
     }).join('');
 
@@ -853,14 +867,23 @@ window.openLiveAuditModal = function(auditedLead) {
   }
 
   // Verbatim Customer Quotes
-  if (allReviewSnippets.length > 0) {
+  const cleanCompName = (auditedLead.name || '').toLowerCase().trim();
+  const validSnippets = allReviewSnippets.filter(s => {
+    if (!s || s.length < 20) return false;
+    const lower = s.toLowerCase();
+    if (lower === cleanCompName) return false;
+    if (s.match(/^(?:\[\d★ - [^\]]+\]:\s*)?["']?\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i)) return false;
+    return true;
+  });
+
+  if (validSnippets.length > 0) {
     reviewQuotesHtml += `
       <div style="margin-top: 6px;">
         <div style="font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">
           💬 Verbatim Negative Customer Feedback:
         </div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
-          ${allReviewSnippets.slice(0, 3).map(s => `
+          ${validSnippets.slice(0, 3).map(s => `
             <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.2); padding: 5px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem; line-height: 1.4;">
               ${escapeHtml(s.substring(0, 180))}
             </div>

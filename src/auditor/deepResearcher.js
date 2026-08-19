@@ -364,61 +364,94 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
     });
     await new Promise(r => setTimeout(r, 400));
 
-    // 7. Extract structured review objects
-    const structuredReviews = await page.evaluate(() => {
+    // 7. Extract structured review objects strictly from review cards
+    const structuredReviews = await page.evaluate((compName) => {
       const results = [];
       const seen = new Set();
+      const cleanCompName = (compName || '').toLowerCase().trim();
       
-      const allCards = Array.from(document.querySelectorAll('div[data-review-id], div[role="article"], div'));
-      const reviewCards = allCards.filter(c => c.getAttribute('data-review-id') || (c.innerText && c.innerText.includes('★') && c.innerText.length > 40) || c.querySelector('[aria-label*="star" i]'));
+      // Target specific review cards only — never generic parent containers or place headers
+      let reviewCards = Array.from(document.querySelectorAll('div[data-review-id]'));
+      if (reviewCards.length === 0) {
+        reviewCards = Array.from(document.querySelectorAll('div[role="article"]')).filter(el => 
+          el.querySelector('[aria-label*="star" i], [aria-label*="stars" i]') &&
+          !el.querySelector('h1') // exclude place title header
+        );
+      }
 
       reviewCards.forEach(card => {
+        // Star rating
         const starEl = card.querySelector('[aria-label*="star" i], [aria-label*="stars" i]');
-        const starAria = starEl ? starEl.getAttribute('aria-label') || '' : '';
+        const starAria = starEl ? (starEl.getAttribute('aria-label') || '') : '';
         const starMatch = starAria.match(/(\d+)/);
         const stars = starMatch ? parseInt(starMatch[1], 10) : 1;
 
-        const authorEl = card.querySelector('button[aria-label*="profile" i], h3, [class*="title"], [class*="author"]');
+        // Author name
+        const authorEl = card.querySelector('button[aria-label*="profile" i], [class*="d4r55"], h3, [class*="title"]');
         const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : 'Customer';
 
-        const dateEl = card.querySelector('[class*="date"], [class*="time"], span[class*="rsqaWe"], span[class*="dehysf"]');
+        // Date
+        const dateEl = card.querySelector('[class*="rsqaWe"], [class*="dehysf"], [class*="date"], [class*="time"]');
         const date = dateEl ? (dateEl.innerText || dateEl.textContent || '').trim() : 'Recent';
 
-        let fullText = (card.innerText || card.textContent || '').trim();
-        if (fullText.includes('Response from the owner')) {
-          fullText = fullText.split('Response from the owner')[0].trim();
+        // Review Text: look for the dedicated review text span or container
+        let reviewText = '';
+        const textSpan = card.querySelector('span[class*="wiI7m"], span[class*="MyEned"], [class*="review-text"], [data-expandable-section]');
+        if (textSpan) {
+          reviewText = (textSpan.innerText || textSpan.textContent || '').trim();
+        } else {
+          // Fallback: extract from card innerText excluding headers, owner responses, and metadata
+          let fullText = (card.innerText || card.textContent || '').trim();
+          if (fullText.includes('Response from the owner')) {
+            fullText = fullText.split('Response from the owner')[0].trim();
+          }
+          const lines = fullText.split('\n').map(l => l.trim()).filter(l => 
+            l.length > 20 && 
+            !l.includes('Share') && 
+            !l.includes('Like') && 
+            !l.includes('Local Guide') && 
+            !l.includes('reviews') && 
+            !l.includes('photo') && 
+            !l.includes('ago') &&
+            !l.includes('★') &&
+            !l.includes('·') &&
+            !l.includes('Verified') &&
+            !l.toLowerCase().includes('medical clinic') &&
+            !l.toLowerCase().includes('open') &&
+            !l.toLowerCase().includes('closed')
+          );
+          reviewText = lines.join(' ').trim();
         }
 
-        const lines = fullText.split('\n').map(l => l.trim()).filter(l => 
-          l.length > 15 && 
-          !l.includes('Share') && 
-          !l.includes('Like') && 
-          !l.includes('Local Guide') && 
-          !l.includes('reviews') && 
-          !l.includes('photo') && 
-          !l.includes('ago') &&
-          !l.includes('★')
-        );
+        // Clean out any quotes and trim
+        reviewText = reviewText.replace(/^["']|["']$/g, '').trim();
 
-        const body = lines.join(' ').trim();
-        if (body.length > 20) {
-          const key = (author + '_' + body.substring(0, 40)).toLowerCase();
+        // Validation: must be a real sentence and NOT just the company name or address
+        const isAddressOrHeader = reviewText.toLowerCase() === cleanCompName ||
+          reviewText.match(/^\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i) ||
+          (reviewText.length < 25 && reviewText.toLowerCase().includes(cleanCompName));
+
+        // Must contain common conversational words
+        const hasWords = /\b(the|and|was|were|they|them|i|we|my|our|to|for|at|in|service|doctor|nurse|clinic|appointment|time|staff|called|told|rude|wait|bill|never|bad|good|hours)\b/i.test(reviewText);
+
+        if (reviewText.length >= 25 && !isAddressOrHeader && hasWords) {
+          const key = (author + '_' + reviewText.substring(0, 35)).toLowerCase();
           if (!seen.has(key)) {
             seen.add(key);
             results.push({
               rating: stars,
               reviewer: author,
               date: date,
-              text: body
+              text: reviewText
             });
           }
         }
       });
 
       return results;
-    });
+    }, companyName);
 
-    console.log(`[Google Maps Review Scraper] Discovered ${structuredReviews.length} reviews for ${companyName}`);
+    console.log(`[Google Maps Review Scraper] Extracted ${structuredReviews.length} verified review comments for ${companyName}`);
     return structuredReviews;
   } catch (err) {
     console.warn(`[Google Maps Review Scraper] Error for ${companyName}:`, err.message);
