@@ -872,7 +872,10 @@ window.openLiveAuditModal = function(auditedLead) {
     if (!s || s.length < 20) return false;
     const lower = s.toLowerCase();
     if (lower === cleanCompName) return false;
+    // Discard addresses
     if (s.match(/^(?:\[\d★ - [^\]]+\]:\s*)?["']?\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i)) return false;
+    // Discard search directory meta snippets
+    if (/\b(?:read\s+\d+\s+(?:customer\s+)?reviews?|read\s+what\s+people|located\s+at\s+\d+|hours,\s+phone\s+number|phone\s+number,\s+directions|one\s+of\s+the\s+best|ratings?,\s+hours|photos,\s+tips|claim\s+this\s+business|unclaimed\s+business|get\s+directions|reviews,\s+ratings)\b/i.test(s)) return false;
     return true;
   });
 

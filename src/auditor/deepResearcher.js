@@ -462,12 +462,36 @@ async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
 }
 
 /**
- * Fast HTTP fallback parser for Yelp, Trustpilot, and DuckDuckGo complaint snippets
+ * Validates whether a text string is a genuine customer review or just a directory meta snippet.
+ */
+function isValidReviewText(text, companyName) {
+  if (!text || typeof text !== 'string') return false;
+  const clean = text.trim();
+  if (clean.length < 25) return false;
+
+  const cleanComp = (companyName || '').toLowerCase().trim();
+  if (clean.toLowerCase() === cleanComp) return false;
+
+  // Strict directory meta snippet detector
+  const isDirectorySnippet = /\b(?:read\s+\d+\s+(?:customer\s+)?reviews?|read\s+what\s+people|located\s+at\s+\d+|hours,\s+phone\s+number|phone\s+number,\s+directions|one\s+of\s+the\s+best|ratings?,\s+hours|photos,\s+tips|claim\s+this\s+business|unclaimed\s+business|get\s+directions|reviews,\s+ratings)\b/i.test(clean);
+  if (isDirectorySnippet) return false;
+
+  // Address line detector
+  const isAddress = /^\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i.test(clean);
+  if (isAddress) return false;
+
+  // Must have conversational English sentence structures
+  const hasConversationalWords = /\b(i|we|my|our|they|them|was|were|the|to|and|for|doctor|nurse|clinic|staff|wait|waited|hour|rude|never|called|service|bill|charged|told|time)\b/i.test(clean);
+  return hasConversationalWords;
+}
+
+/**
+ * Fast HTTP fallback parser for Yelp and Trustpilot structured JSON-LD reviews
  */
 async function scrapeHttpReviewsDataset(companyName, location, website) {
   const reviews = [];
 
-  // Source 1: Yelp
+  // Source 1: Yelp JSON-LD
   try {
     const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(companyName)}&find_loc=${encodeURIComponent(location || '')}`;
     const searchResp = await axios.get(searchUrl, { headers: HEADERS, timeout: 10000 });
@@ -493,28 +517,20 @@ async function scrapeHttpReviewsDataset(companyName, location, website) {
             (obj.review || []).forEach(r => {
               const text = (r.reviewBody || r.description || '').trim();
               const rating = parseInt(r.reviewRating?.ratingValue || 5);
-              if (text.length > 20) reviews.push({ rating, text, reviewer: r.author?.name || 'Customer', date: r.datePublished || 'Recent' });
+              if (isValidReviewText(text, companyName)) {
+                reviews.push({ 
+                  rating, 
+                  text, 
+                  reviewer: r.author?.name || 'Customer', 
+                  date: r.datePublished || 'Recent' 
+                });
+              }
             });
           });
         } catch (_) {}
       });
     }
   } catch (_) {}
-
-  // Source 2: DuckDuckGo Complaint Snippets
-  if (reviews.length === 0) {
-    try {
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`"${companyName}" ${location || ''} reviews complaints`)}`;
-      const { data } = await axios.get(ddgUrl, { headers: HEADERS, timeout: 10000 });
-      const $d = cheerio.load(data);
-      $d('.result__snippet').each((_, el) => {
-        const text = $d(el).text().trim();
-        if (text.length > 40 && !/^(www\.|https?:\/\/)/.test(text)) {
-          reviews.push({ rating: 1, text: text.substring(0, 300), reviewer: 'Customer', date: 'Recent' });
-        }
-      });
-    } catch (_) {}
-  }
 
   return reviews.filter(r => r.rating <= 3);
 }
@@ -545,19 +561,16 @@ async function deepResearch(companyName, location, website, browser) {
   const yelpData = yelp.status === 'fulfilled' ? yelp.value : null;
   let structuredGmb = gmbReviews.status === 'fulfilled' ? (gmbReviews.value || []) : [];
 
-  // If Puppeteer didn't find reviews, run HTTP fallback
-  if (structuredGmb.length === 0) {
-    try {
-      structuredGmb = await scrapeHttpReviewsDataset(companyName, location, website);
-    } catch (_) {}
-  }
+  // Filter all reviews to ensure strictly genuine reviews
+  structuredGmb = structuredGmb.filter(r => isValidReviewText(r.text, companyName));
 
   // Convert structured GMB reviews into quoted strings for NLP compatibility
   const gmbFormattedQuotes = structuredGmb.map(r => `[${r.rating}★ - ${r.reviewer}]: "${r.text}"`);
 
   let mergedSnippets = [...gmbFormattedQuotes];
   if (yelpData && Array.isArray(yelpData.yelp_review_snippets)) {
-    mergedSnippets.push(...yelpData.yelp_review_snippets);
+    const validYelp = yelpData.yelp_review_snippets.filter(s => isValidReviewText(s, companyName));
+    mergedSnippets.push(...validYelp);
   }
 
   const finalYelpData = yelpData || {
