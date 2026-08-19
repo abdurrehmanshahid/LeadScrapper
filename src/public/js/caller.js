@@ -172,70 +172,62 @@ function renderActiveLead() {
     dossierSection.style.display = 'none';
   }
 
-  // Consultative Technical Diagnostic & Advisory Box
-  const advisorySection = document.getElementById('callAdvisorySection');
-  const bc = lead.battlecard || {};
-
-  if (advisorySection) {
-    advisorySection.style.display = 'block';
-    const fragilityScore = bc.vulnerability_score || (lead.category === 'BPO_RESCUE' ? 82 : 74);
-    const fragilityBadge = document.getElementById('callFragilityBadge');
-    if (fragilityBadge) {
-      fragilityBadge.textContent = `🚨 ${fragilityScore}% Fragility Risk`;
-      if (fragilityScore >= 80) {
-        fragilityBadge.style.background = 'rgba(239,68,68,0.25)';
-        fragilityBadge.style.color = '#f87171';
-      } else {
-        fragilityBadge.style.background = 'rgba(245,158,11,0.2)';
-        fragilityBadge.style.color = '#fbbf24';
-      }
-    }
-
-    const leakBadge = document.getElementById('callLeakBadge');
-    if (leakBadge) {
-      leakBadge.textContent = `💸 Leak: ${bc.estimated_financial_leak || '$45K-$80K/yr'}`;
-    }
-
-    const flagsContainer = document.getElementById('callVulnerabilityFlags');
-    if (flagsContainer) {
-      const flags = bc.vulnerability_flags && bc.vulnerability_flags.length > 0
-        ? bc.vulnerability_flags
-        : [
-            lead.category === 'BPO_RESCUE'
-              ? '🚨 ERP Support Debt: Escalating partner hourly costs & slow SLA resolution'
-              : '⚠️ Disconnected Workflow Island: Intake, dispatch & billing operate in silos'
-          ];
-      flagsContainer.innerHTML = flags.map(f => `
-        <div style="font-size: 0.78rem; font-weight: 700; color: #fecaca; display: flex; align-items: center; gap: 6px;">
-          ${escapeHtml(f)}
-        </div>
-      `).join('');
-    }
-
-    const prescriptionContainer = document.getElementById('call3StepPrescription');
-    if (prescriptionContainer) {
-      const steps = bc.advisory_3step_plan || [
-        { step: '1. Technical Diagnostic', action: 'Scan database health, API latency & intake forms to locate churn bottlenecks.' },
-        { step: '2. Workflow Automation Bridge', action: 'Deploy n8n webhooks to automate CRM, dispatch & billing with 0 double-entry.' },
-        { step: '3. Zero-Downtime Migration', action: 'Migrate to unified Odoo v18 with full staff onboarding and 0 disruption.' }
-      ];
-      prescriptionContainer.innerHTML = steps.map(s => `
-        <div>
-          <span style="font-weight: 800; color: #a5b4fc;">${escapeHtml(s.step)}:</span>
-          <span style="color: #cbd5e1; margin-left: 4px;">${escapeHtml(s.action)}</span>
-        </div>
-      `).join('');
-    }
+  // Opportunity Bar & Fit Tier
+  const fitTierEl = document.getElementById('callFitTierBadge');
+  if (fitTierEl) {
+    fitTierEl.textContent = `🌟 ${lead.fit_tier || lead.opportunity?.fit_tier || 'Solid Opportunity (Tier 2)'}`;
+  }
+  const dealTierEl = document.getElementById('callDealTierBadge');
+  if (dealTierEl) {
+    dealTierEl.textContent = `💰 ${lead.estimated_deal_tier || lead.opportunity?.estimated_deal_tier || '$25,000 - $75,000'}`;
+  }
+  const archetypeEl = document.getElementById('callArchetypeBadge');
+  if (archetypeEl) {
+    archetypeEl.textContent = `🏢 ${lead.business_archetype || lead.industry || 'Healthcare & Commercial'}`;
   }
 
-  // Problem Analysis
+  // Recommended Odoo Modules
+  const modulesContainer = document.getElementById('callRecommendedModules');
+  if (modulesContainer) {
+    const modules = lead.recommended_modules || lead.odoo_playbook?.recommended_odoo_modules || [
+      'Odoo Appointments', 'Odoo Invoicing & Accounting', 'Odoo CRM', 'Odoo Documents', 'Odoo Helpdesk'
+    ];
+    modulesContainer.innerHTML = modules.map(m => `
+      <span style="background: rgba(99,102,241,0.2); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.4); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.775rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+        📦 ${escapeHtml(m)}
+      </span>
+    `).join('');
+  }
+
+  // 6-Phase Roadmap
+  const roadmapContainer = document.getElementById('callRoadmapList');
+  if (roadmapContainer) {
+    const roadmap = lead.action_plan_roadmap || lead.odoo_playbook?.action_plan_roadmap || [
+      'Phase 1: Business Process Mapping & Gap Analysis',
+      'Phase 2: Odoo Enterprise Instance Setup & Chart of Accounts Configuration',
+      'Phase 3: Legacy Data Cleansing & Migration',
+      'Phase 4: Custom Workflow Automation & 3rd-party App Integrations',
+      'Phase 5: User Acceptance Testing (UAT) & Staff Training',
+      'Phase 6: Go-Live Support & Ongoing Optimization'
+    ];
+    roadmapContainer.innerHTML = roadmap.map(r => `
+      <div style="display: flex; align-items: baseline; gap: 6px; line-height: 1.4;">
+        <span style="color: #38bdf8; font-weight: 800;">•</span>
+        <span>${escapeHtml(r)}</span>
+      </div>
+    `).join('');
+  }
+
+  // Problem Analysis (AI-Enriched Customer & Operational Gaps)
   const problemList = document.getElementById('callProblemList');
-  const problems = bc.problem_analysis && bc.problem_analysis.length > 0
-    ? bc.problem_analysis
-    : [
-        `Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
-        `Operating on manual spreadsheets/disconnected accounting.`
-      ];
+  const problems = (lead.customer_pain_points && lead.customer_pain_points.length > 0)
+    ? [...lead.customer_pain_points, ...(lead.operational_bottlenecks || [])]
+    : (bc.problem_analysis && bc.problem_analysis.length > 0
+      ? bc.problem_analysis
+      : [
+          `Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
+          `Operating on manual spreadsheets/disconnected accounting.`
+        ]);
   problemList.innerHTML = problems.map(p => `<li>${escapeHtml(p)}</li>`).join('');
 
   // Elevator Script

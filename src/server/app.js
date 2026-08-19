@@ -467,6 +467,17 @@ app.get('/api/export/csv', async (_req, res) => {
   }
 });
 
+// 11. Sync & Ingest Enriched AI Leads from JSON
+app.post('/api/leads/sync-enriched', async (_req, res) => {
+  try {
+    const { importEnrichedLeads } = require('../storage/importEnrichedLeads');
+    const count = await importEnrichedLeads();
+    res.json({ success: true, message: `Successfully synchronized ${count} AI-enriched leads!`, count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function start() {
@@ -488,9 +499,17 @@ async function start() {
   });
 
   // Connect to Database (Atlas or local fallback)
-  db.connect().catch(err => {
+  try {
+    await db.connect();
+    const existing = await db.getAllLeads();
+    if (existing.length < 300) {
+      console.log(`[Auto-Sync] Database has ${existing.length} leads. Syncing 399 enriched leads...`);
+      const { importEnrichedLeads } = require('../storage/importEnrichedLeads');
+      await importEnrichedLeads();
+    }
+  } catch (err) {
     console.warn('Database initialization warning:', err.message);
-  });
+  }
 }
 
 start().catch(err => {

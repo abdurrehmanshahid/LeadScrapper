@@ -73,4 +73,69 @@ function detectTechStack(html, headers = {}, url = '') {
   };
 }
 
-module.exports = { detectTechStack };
+/**
+ * Accumulates observable evidence of technical debt from HTML and HTTP headers.
+ * Never infers a version unless it's directly present in the source.
+ */
+function detectLegacySignals(html = '', headers = {}) {
+  const signals = [];
+
+  // Old jQuery — 1.x and 2.x are EOL
+  const jqMatch = html.match(/jquery[./-](\d+\.\d+(?:\.\d+)?)/i);
+  if (jqMatch) {
+    const major = parseInt(jqMatch[1].split('.')[0], 10);
+    if (major <= 2) signals.push(`jQuery ${jqMatch[1]} detected — major version obsolete since 2016`);
+  }
+
+  // Old Bootstrap — 2.x / 3.x
+  const bsMatch = html.match(/bootstrap[./-](\d+\.\d+(?:\.\d+)?)/i);
+  if (bsMatch) {
+    const major = parseInt(bsMatch[1].split('.')[0], 10);
+    if (major <= 3) signals.push(`Bootstrap ${bsMatch[1]} detected — Bootstrap 4+ released 2018`);
+  }
+
+  // Flash / Silverlight / ActiveX
+  if (/\.swf["'\s]|activexobject|shockwaveflash|silverlight/i.test(html)) {
+    signals.push('Adobe Flash / ActiveX / Silverlight references detected — EOL since 2020');
+  }
+
+  // Excessive table-based layout (data tables excluded by heuristic)
+  const tableCount = (html.match(/<table[\s>]/gi) || []).length;
+  if (tableCount > 6 && !/data-table|pricing.table|compare.table/i.test(html)) {
+    signals.push(`Table-based layout (${tableCount} tables) — pre-CSS-Grid design pattern`);
+  }
+
+  // Excessive inline styles
+  const inlineStyleCount = (html.match(/\bstyle\s*=/gi) || []).length;
+  if (inlineStyleCount > 35) {
+    signals.push(`Excessive inline styles (${inlineStyleCount}) — indicates manually maintained legacy markup`);
+  }
+
+  // Old PHP version visible in header
+  const xpb = (headers['x-powered-by'] || '').toLowerCase();
+  if (/php\/[45]\./.test(xpb)) signals.push(`PHP 4/5 visible in X-Powered-By header — EOL version`);
+
+  // Old ASP.NET
+  if (/asp\.net$/.test(xpb)) signals.push('Classic ASP.NET detected in headers');
+
+  // WordPress version from meta generator
+  const gen = (html.match(/<meta[^>]+name=["']generator["'][^>]+content=["']([^"']+)/i) || [])[1] || '';
+  if (gen) {
+    const wpVer = gen.match(/wordpress\s*([\d.]+)/i);
+    if (wpVer) {
+      const major = parseFloat(wpVer[1]);
+      if (major < 6) signals.push(`WordPress ${wpVer[1]} — not on current major version (6.x)`);
+    }
+    if (/joomla/i.test(gen)) signals.push('Joomla CMS detected — high maintenance overhead');
+    if (/drupal\s*[5-8]/i.test(gen)) signals.push('Drupal detected — consider migration complexity');
+  }
+
+  // No cache-control or expires headers = poor caching setup
+  if (!headers['cache-control'] && !headers['expires']) {
+    signals.push('No HTTP caching headers — assets served without browser cache instructions');
+  }
+
+  return signals;
+}
+
+module.exports = { detectTechStack, detectLegacySignals };

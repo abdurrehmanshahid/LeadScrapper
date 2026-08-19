@@ -160,15 +160,26 @@ function generateBattlecard(lead) {
       );
     }
 
+    const enrichedPains = lead.customer_pain_points || [];
+    const enrichedBottlenecks = lead.operational_bottlenecks || [];
+    const allEnrichedProblems = [...enrichedPains, ...enrichedBottlenecks];
+
+    if (allEnrichedProblems.length > 0) {
+      allEnrichedProblems.slice(0, 4).forEach(p => problemPoints.push(p));
+    }
+
     while (problemPoints.length > 4) problemPoints.pop();
     if (problemPoints.length === 0) {
       problemPoints.push(`No unified ERP or automated client portal detected — operations rely on manual double-entry.`);
     }
 
-    targetOffer = `Full Business Operations Modernization: Unified Odoo ERP (CRM + Job Dispatch + Automated Invoicing + Client Portal) with automated n8n workflows. Live in 30 days with zero operational downtime.`;
+    const recommendedMods = (lead.recommended_modules || []).join(' + ');
+    targetOffer = lead.pitch_hook
+      ? `Tailored Odoo Modernization: ${lead.pitch_hook}${recommendedMods ? ` (Powered by ${recommendedMods})` : ''}`
+      : `Full Business Operations Modernization: Unified Odoo ERP (CRM + Job Dispatch + Automated Invoicing + Client Portal) with automated n8n workflows. Live in 30 days with zero operational downtime.`;
 
     const isContractor = ['roof', 'hvac', 'plumb', 'construct', 'field service', 'electric', 'solar', 'pest'].some(k => industry.includes(k));
-    const isHealthcare = ['health', 'clinic', 'dental', 'medical', 'physio', 'optom'].some(k => industry.includes(k));
+    const isHealthcare = ['health', 'clinic', 'dental', 'medical', 'physio', 'optom', 'hospital', 'wellness'].some(k => industry.includes(k));
     const isWholesale = ['wholesale', 'distribution', 'logistics', 'manufactur', 'supply'].some(k => industry.includes(k));
 
     const newsHook = latestNews
@@ -180,7 +191,9 @@ function generateBattlecard(lead) {
     const ageCredential = yearsInBusiness ? ` For a business with ${yearsInBusiness} in the community,` : '';
     const report = lead.review_dossier?.intelligence_report;
 
-    if (report && report.totalReviewsAnalyzed > 0) {
+    if (lead.pitch_hook) {
+      opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing ${lead.business_archetype || industry} teams modernize operations with unified Odoo workflows. ${lead.pitch_hook} Does your team currently experience friction in manual intake, scheduling, or multi-system bookkeeping?`;
+    } else if (report && report.totalReviewsAnalyzed > 0) {
       const topDetail = report.executiveSummary.primaryDetail;
       opener = `Hi, Big Binary Tech here.${newsHook}${hiringHook} We help growing ${industry} providers replace disconnected scheduling and intake tools with a single automated Odoo platform. Our diagnostic scan of your public feedback showed that ${topDetail} Are communication handoffs or administrative bottlenecks putting unnecessary pressure on your staff?`;
     } else if (isContractor) {

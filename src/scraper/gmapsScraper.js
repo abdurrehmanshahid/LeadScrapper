@@ -278,7 +278,7 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
       };
 
       if (realWebsite && realWebsite.startsWith('http')) {
-        audit = await auditWebsite(realWebsite);
+        audit = await auditWebsite(realWebsite, browser);
       }
 
       const emailDomain = realWebsite ? realWebsite.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : null;
@@ -289,9 +289,9 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
       const decisionMakers = await findDecisionMakers(cand.name, realWebsite, emailDomain, browser);
 
       // 7b. Deep Research Intelligence (parallel multi-source)
-      onProgress({ status: 'Deep Research', message: `[${count}/${finalCandidates.length}] Running deep intel on ${cand.name} (Yelp, News, Jobs, BBB)...` });
+      onProgress({ status: 'Deep Research', message: `[${count}/${finalCandidates.length}] Running deep intel on ${cand.name} (Yelp, News, Jobs, BBB, Reviews)...` });
       let deepIntel = null;
-      try { deepIntel = await deepResearch(cand.name, location, realWebsite); } catch (_) {}
+      try { deepIntel = await deepResearch(cand.name, location, realWebsite, browser, cand.place_url); } catch (_) {}
 
       // 8. Build Real Lead Record
       // Detect industry from the Google Maps card category text in the snippet,
@@ -304,6 +304,7 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
         phone: realPhone || `(555) 000-0000`,
         email: email,
         website: realWebsite || `https://maps.google.com/?q=${encodeURIComponent(cand.name)}`,
+        place_url: cand.place_url || null,
         address: realAddress || `${location || 'Metro Area'}`,
         rating: cand.rating || '4.5',
         reviews_count: cand.reviews_count !== undefined ? cand.reviews_count : null,

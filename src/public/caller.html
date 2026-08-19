@@ -79,11 +79,24 @@
           </div>
         </div>
 
+        <!-- Firmographics & Opportunity Deal Bar -->
+        <div id="callOpportunityBar" style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.65rem 0.9rem; align-items: center;">
+          <span id="callFitTierBadge" class="score-pill" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); font-size: 0.75rem; font-weight: 800;">
+            🌟 Solid Opportunity (Tier 2)
+          </span>
+          <span id="callDealTierBadge" class="score-pill" style="background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); font-size: 0.75rem; font-weight: 800;">
+            💰 Deal Tier: $25,000 - $75,000
+          </span>
+          <span id="callArchetypeBadge" class="score-pill" style="background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); font-size: 0.75rem; font-weight: 700;">
+            🏢 Healthcare & Medical Services
+          </span>
+        </div>
+
         <!-- Decision Makers -->
         <div id="callDecisionMakersSection" style="margin-bottom: 1.25rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <h4 style="font-size: 0.8rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
-              👤 Ask For / Decision Makers:
+              👤 Verified Decision Makers & Executives:
             </h4>
             <button onclick="toggleAddContact()" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.4); color: #a78bfa; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.72rem; cursor: pointer; font-weight: 700;">+ Add Contact</button>
           </div>
@@ -105,66 +118,27 @@
           </div>
         </div>
 
-        <!-- Editable Phone + Notes -->
-        <div id="callEditPhoneRow" style="margin-bottom: 1rem; display: none;">
-          <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em;">✏️ Update Phone Number</div>
-          <div style="display: flex; gap: 0.5rem;">
-            <input id="editPhoneInput" type="text" placeholder="(555) 123-4567" class="form-control" style="font-size: 0.85rem; padding: 0.4rem 0.65rem;">
-            <button onclick="saveEditedPhone()" class="btn btn-accent" style="font-size: 0.78rem; padding: 0.35rem 0.85rem; white-space: nowrap;">Save Phone</button>
-            <button onclick="document.getElementById('callEditPhoneRow').style.display='none'" class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.85rem;">✕</button>
-          </div>
-        </div>
-
-        <!-- Pre-Call Intelligence Dossier (Deep Research) -->
-        <div id="callIntelSection" style="display: none; margin-bottom: 1.25rem; background: rgba(16, 185, 129, 0.07); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-          <div style="font-size: 0.775rem; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;">
-            🔍 Pre-Call Intelligence Dossier
-          </div>
-          <div id="callIntelGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.6rem;"></div>
-          <div id="callIntelNewsRow" style="display: none; margin-top: 0.65rem; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.8rem; color: #94a3b8;">
-            <span style="color: #f59e0b; font-weight: 700;">📰 Latest News:</span>
-            <span id="callIntelNewsHeadline"></span>
-          </div>
-          <div id="callIntelYelpRow" style="display: none; margin-top: 0.55rem; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.8rem; color: #94a3b8; font-style: italic; line-height: 1.45;">
-            <span style="color: #f43f5e; font-weight: 700; font-style: normal;">⭐ Yelp Voice:</span>
-            <span id="callIntelYelpSnippet"></span>
-          </div>
-        </div>
-
-        <!-- AI Review Audit Dossier & Case Study Match -->
-        <div id="callDossierSection" style="margin-bottom: 1.25rem; display: none; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-            <span style="font-size: 0.775rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em;">
-              🧠 Hugging Face Review Dossier & NLI Friction
+        <!-- Odoo Sales Playbook & Recommended Modules Section -->
+        <div id="callPlaybookSection" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(56, 189, 248, 0.08)); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: var(--radius-md); padding: 1.15rem 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+            <span style="font-size: 0.8rem; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em;">
+              🚀 Tailored Odoo Sales Playbook & Recommended Modules
             </span>
-            <span id="callSemanticFitBadge" class="score-pill score-high" style="font-size: 0.725rem;">--</span>
-          </div>
-          <p id="callDossierText" style="font-size: 0.875rem; line-height: 1.5; color: #ffffff;"></p>
-        </div>
-
-        <!-- Consultative Technical Diagnostic & Advisory Box -->
-        <div id="callAdvisorySection" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(99, 102, 241, 0.08)); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 1.15rem 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.8rem; font-weight: 800; color: #f87171; text-transform: uppercase; letter-spacing: 0.05em;">
-                🩺 Consultative Diagnostic & Software Fragility Index
-              </span>
-            </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <span id="callFragilityBadge" class="score-pill" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4); font-size: 0.725rem; font-weight: 800;">🚨 78% Vulnerability</span>
-              <span id="callLeakBadge" class="score-pill" style="background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); font-size: 0.725rem; font-weight: 800;">💸 Leak: $45K-$80K/yr</span>
-            </div>
           </div>
 
-          <!-- Vulnerability Flags -->
-          <div id="callVulnerabilityFlags" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem;"></div>
-
-          <!-- 3-Step Advisory Prescription -->
-          <div style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 0.75rem 1rem; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="font-size: 0.7rem; text-transform: uppercase; color: #a5b4fc; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 0.4rem;">
-              📋 Recommended Consultative 3-Step Prescription
+          <div style="margin-bottom: 0.75rem;">
+            <div style="font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 0.35rem;">
+              🧩 Recommended Odoo Apps:
             </div>
-            <div id="call3StepPrescription" style="display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.8rem; color: #cbd5e1;"></div>
+            <div id="callRecommendedModules" style="display: flex; flex-wrap: wrap; gap: 0.4rem;"></div>
+          </div>
+
+          <!-- 6-Phase Action Plan Roadmap -->
+          <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem 1rem; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-size: 0.7rem; text-transform: uppercase; color: #38bdf8; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 0.4rem;">
+              🗺️ 6-Phase Implementation Roadmap:
+            </div>
+            <div id="callRoadmapList" style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.775rem; color: #cbd5e1;"></div>
           </div>
         </div>
 
