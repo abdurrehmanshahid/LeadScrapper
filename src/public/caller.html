@@ -79,6 +79,16 @@
           </div>
         </div>
 
+        <!-- Editable Phone Row -->
+        <div id="callEditPhoneRow" style="margin-bottom: 1rem; display: none;">
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em;">✏️ Update Phone Number</div>
+          <div style="display: flex; gap: 0.5rem;">
+            <input id="editPhoneInput" type="text" placeholder="(555) 123-4567" class="form-control" style="font-size: 0.85rem; padding: 0.4rem 0.65rem;">
+            <button onclick="saveEditedPhone()" class="btn btn-accent" style="font-size: 0.78rem; padding: 0.35rem 0.85rem; white-space: nowrap;">Save Phone</button>
+            <button onclick="document.getElementById('callEditPhoneRow').style.display='none'" class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.85rem;">✕</button>
+          </div>
+        </div>
+
         <!-- Firmographics & Opportunity Deal Bar -->
         <div id="callOpportunityBar" style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.65rem 0.9rem; align-items: center;">
           <span id="callFitTierBadge" class="score-pill" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); font-size: 0.75rem; font-weight: 800;">

@@ -104,45 +104,52 @@ function renderActiveLead() {
 
   // Reset edit phone row
   const editPhoneRow = document.getElementById('callEditPhoneRow');
-  editPhoneRow.style.display = 'none';
-  document.getElementById('editPhoneInput').value = '';
-  document.getElementById('callWebsiteLink').innerHTML = lead.website 
-    ? `<a href="${lead.website}" target="_blank" style="color: #38bdf8; text-decoration: none;">${lead.website.replace(/^https?:\/\//, '').split('/')[0]} ↗</a>` 
-    : '';
+  if (editPhoneRow) editPhoneRow.style.display = 'none';
+  const editPhoneInput = document.getElementById('editPhoneInput');
+  if (editPhoneInput) editPhoneInput.value = '';
+
+  const webLink = document.getElementById('callWebsiteLink');
+  if (webLink) {
+    webLink.innerHTML = lead.website 
+      ? `<a href="${lead.website}" target="_blank" style="color: #38bdf8; text-decoration: none;">${lead.website.replace(/^https?:\/\//, '').split('/')[0]} ↗</a>` 
+      : '';
+  }
 
   // Decision Makers
   const dms = lead.decision_makers || [];
   const dmSection = document.getElementById('callDecisionMakersSection');
+  if (dmSection) dmSection.style.display = 'block';
   const dmContainer = document.getElementById('callDecisionMakers');
-  dmSection.style.display = 'block';
-  if (dms.length > 0) {
-    dmContainer.innerHTML = dms.map(dm => {
-      const safeName = dm.name.replace(/'/g, "\\'");
-      const linkedinBtn = dm.linkedin_url
-        ? `<a href="${escapeHtml(dm.linkedin_url)}" target="_blank" style="font-size: 0.7rem; color: #818cf8; text-decoration: none; margin-left: 6px;">🔗 LinkedIn ↗</a>`
-        : '';
-      const emailHint = dm.email_guess
-        ? `<div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">✉ ${escapeHtml(dm.email_guess)}</div>`
-        : '';
-      return `
-        <div style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3); border-radius: 8px; padding: 0.6rem 0.9rem; cursor: pointer;"
-          onclick="navigator.clipboard.writeText('${safeName}'); showToast('📋 ${safeName} copied!');"
-          title="Click to copy name to clipboard">
-          <div style="font-weight: 700; color: #f1f5f9; font-size: 0.875rem;">${escapeHtml(dm.name)} ${linkedinBtn}</div>
-          <div style="font-size: 0.775rem; color: #a78bfa;">${escapeHtml(dm.title)}</div>
-          ${emailHint}
+  if (dmContainer) {
+    if (dms.length > 0) {
+      dmContainer.innerHTML = dms.map(dm => {
+        const safeName = (dm.name || 'Executive').replace(/'/g, "\\'");
+        const linkedinBtn = dm.linkedin_url
+          ? `<a href="${escapeHtml(dm.linkedin_url)}" target="_blank" style="font-size: 0.7rem; color: #818cf8; text-decoration: none; margin-left: 6px;">🔗 LinkedIn ↗</a>`
+          : '';
+        const emailHint = dm.email_guess
+          ? `<div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">✉ ${escapeHtml(dm.email_guess)}</div>`
+          : '';
+        return `
+          <div style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3); border-radius: 8px; padding: 0.6rem 0.9rem; cursor: pointer;"
+            onclick="navigator.clipboard.writeText('${safeName}'); showToast('📋 ${safeName} copied!');"
+            title="Click to copy name to clipboard">
+            <div style="font-weight: 700; color: #f1f5f9; font-size: 0.875rem;">${escapeHtml(dm.name)} ${linkedinBtn}</div>
+            <div style="font-size: 0.775rem; color: #a78bfa;">${escapeHtml(dm.title || 'Decision Maker')}</div>
+            ${emailHint}
+          </div>`;
+      }).join('');
+    } else {
+      const cleanComp = lead.name.replace(/(\b(inc|llc|ltd|corp|corporation|co|group|services|company|l\.l\.c)\b\.?)/gi, '').trim() || lead.name;
+      const liSearch = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Manager OR President')}`;
+      const gSearch = `https://www.google.com/search?q=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Director site:linkedin.com/in')}`;
+      dmContainer.innerHTML = `
+        <div style="font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.2rem 0;">
+          <span>No contacts found — search manually:</span>
+          <a href="${liSearch}" target="_blank" style="color: #818cf8; text-decoration: none; font-weight: 600;">🔗 LinkedIn ↗</a>
+          <a href="${gSearch}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 600;">🔍 Google ↗</a>
         </div>`;
-    }).join('');
-  } else {
-    const cleanComp = lead.name.replace(/(\b(inc|llc|ltd|corp|corporation|co|group|services|company|l\.l\.c)\b\.?)/gi, '').trim() || lead.name;
-    const liSearch = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Manager OR President')}`;
-    const gSearch = `https://www.google.com/search?q=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Director site:linkedin.com/in')}`;
-    dmContainer.innerHTML = `
-      <div style="font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.2rem 0;">
-        <span>No contacts found — search manually:</span>
-        <a href="${liSearch}" target="_blank" style="color: #818cf8; text-decoration: none; font-weight: 600;">🔗 LinkedIn ↗</a>
-        <a href="${gSearch}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 600;">🔍 Google ↗</a>
-      </div>`;
+    }
   }
 
   // Pre-Call Intelligence Dossier (deep_intel)
@@ -155,20 +162,21 @@ function renderActiveLead() {
   const dossier = lead.review_dossier || (lead.battlecard && lead.battlecard.review_dossier);
   const csFit = lead.case_study_fit || (lead.battlecard && lead.battlecard.case_study_fit);
 
-  if (dossier && dossier.summary) {
+  if (dossier && dossier.summary && dossierSection && dossierText) {
     dossierSection.style.display = 'block';
-    // Render each part on its own line for readability in the caller portal
     const dossierParts = dossier.parts && dossier.parts.length > 0 ? dossier.parts : [dossier.summary];
     dossierText.innerHTML = dossierParts.map((p, i) => {
       const icons = ['🏢', '💬', '💼', '📝', '📰'];
       return `<span style="display:block; margin-bottom: ${i < dossierParts.length - 1 ? '0.5rem' : '0'}; line-height: 1.5;">${icons[i] || '•'} ${escapeHtml(p)}</span>`;
     }).join('');
-    if (csFit && csFit.semantic_fit_pct) {
-      semanticFitBadge.textContent = `🎯 ${csFit.semantic_fit_pct}% Case Study Fit (${csFit.matched_case_study})`;
-    } else {
-      semanticFitBadge.textContent = `🚨 ${dossier.top_friction || 'High Priority'}`;
+    if (semanticFitBadge) {
+      if (csFit && csFit.semantic_fit_pct) {
+        semanticFitBadge.textContent = `🎯 ${csFit.semantic_fit_pct}% Case Study Fit (${csFit.matched_case_study})`;
+      } else {
+        semanticFitBadge.textContent = `🚨 ${dossier.top_friction || 'High Priority'}`;
+      }
     }
-  } else {
+  } else if (dossierSection) {
     dossierSection.style.display = 'none';
   }
 
@@ -220,37 +228,88 @@ function renderActiveLead() {
 
   // Problem Analysis (AI-Enriched Customer & Operational Gaps)
   const problemList = document.getElementById('callProblemList');
-  const problems = (lead.customer_pain_points && lead.customer_pain_points.length > 0)
-    ? [...lead.customer_pain_points, ...(lead.operational_bottlenecks || [])]
-    : (bc.problem_analysis && bc.problem_analysis.length > 0
-      ? bc.problem_analysis
-      : [
-          `Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
-          `Operating on manual spreadsheets/disconnected accounting.`
-        ]);
-  problemList.innerHTML = problems.map(p => `<li>${escapeHtml(p)}</li>`).join('');
+  if (problemList) {
+    const bc = lead.battlecard || {};
+    const problems = (lead.customer_pain_points && lead.customer_pain_points.length > 0)
+      ? [...lead.customer_pain_points, ...(lead.operational_bottlenecks || [])]
+      : (bc.problem_analysis && bc.problem_analysis.length > 0
+        ? bc.problem_analysis
+        : [
+            `Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
+            `Operating on manual spreadsheets/disconnected accounting.`
+          ]);
+    problemList.innerHTML = problems.map(p => `<li>${escapeHtml(p)}</li>`).join('');
+  }
 
-  // Elevator Script
-  document.getElementById('callScriptBox').textContent = 
-    bc.elevator_opener || `Hi, I noticed ${lead.name} is running strong operations, but your web systems haven't been updated recently...`;
+  // Set Persona Script
+  setCallerPersona('FOUNDER_CEO');
 
   // Objection Handlers
   const objList = document.getElementById('callObjectionsList');
-  const objections = bc.objection_handlers && bc.objection_handlers.length > 0
-    ? bc.objection_handlers
-    : [
-        { objection: '"We already use QuickBooks."', counter: '"QuickBooks is great for taxes, but Odoo connects your field jobs, inventory, and billing automatically."' }
-      ];
+  if (objList) {
+    const bc = lead.battlecard || {};
+    const objections = bc.objection_handlers && bc.objection_handlers.length > 0
+      ? bc.objection_handlers
+      : [
+          { objection: '"We already use QuickBooks / spreadsheets and it works fine."', counter: '"QuickBooks is great for taxes, but Odoo connects your field jobs, inventory, client portal, and automated billing with zero double-entry."' },
+          { objection: '"We don\'t have budget for a big IT project right now."', counter: '"Odoo typically replaces 3 to 4 separate software subscriptions you are already paying for. Most clients see the system pay for itself in the first 60 days from labor savings alone."' }
+        ];
 
-  objList.innerHTML = objections.map(o => `
-    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.825rem;">
-      <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.2rem;">${escapeHtml(o.objection)}</div>
-      <div style="color: #cbd5e1;">↳ ${escapeHtml(o.counter)}</div>
-    </div>
-  `).join('');
+    objList.innerHTML = objections.map(o => `
+      <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.825rem;">
+        <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.2rem;">${escapeHtml(o.objection)}</div>
+        <div style="color: #cbd5e1;">↳ ${escapeHtml(o.counter)}</div>
+      </div>
+    `).join('');
+  }
 
-  document.getElementById('callNotesInput').value = lead.notes || '';
+  const notesEl = document.getElementById('callNotesInput');
+  if (notesEl) notesEl.value = lead.notes || '';
 }
+
+window.setCallerPersona = function(personaKey) {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  document.querySelectorAll('.persona-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-persona') === personaKey);
+  });
+
+  const badge = document.getElementById('activePersonaBadge');
+  const labels = {
+    'FOUNDER_CEO': 'Founder / CEO',
+    'OPERATIONS_COO': 'COO / Ops (ERP/POS)',
+    'FINANCE_CFO': 'CFO (e-Invoice & Accounting)',
+    'REVOPS_CRM': 'RevOps (CRM/WhatsApp)',
+    'HR_PEOPLE': 'HR & People Ops',
+    'TECH_CIO_CTO': 'CIO/CTO (SLA & Cloud)',
+    'RETAIL_RESTAURANT_POS': 'Retail/Restaurant POS',
+    'MARKETING_GROWTH': 'VP Growth'
+  };
+  if (badge) badge.textContent = labels[personaKey] || 'Decision Maker';
+
+  const scriptBox = document.getElementById('callScriptBox');
+  if (!scriptBox) return;
+
+  const hook = lead.pitch_hook || lead.odoo_playbook?.custom_pitch_hook || '';
+  const archetype = lead.business_archetype || lead.industry || 'operations';
+  const name = lead.name || 'your company';
+
+  const scripts = {
+    'FOUNDER_CEO': hook 
+      ? `Hi, Big Binary Tech here. We help ${archetype} leadership modernize operations with unified Odoo workflows. ${hook} Does your team currently experience friction in manual intake, scheduling, or multi-system bookkeeping?`
+      : `Hi, Big Binary Tech here. We build custom Odoo operations platforms for ${name} that unify customer intake, job tracking, and automated billing into a single dashboard. Are disconnected software tools currently creating administrative overhead?`,
+    'OPERATIONS_COO': `Hi, Big Binary Tech here. We help ${archetype} operations teams eliminate spreadsheet disconnects and manual handoffs with custom Odoo job-dispatch, client portal, and inventory workflows. Are manual coordination bottlenecks slowing down fulfillment for ${name}?`,
+    'FINANCE_CFO': `Hi, Big Binary Tech here. We help finance leaders automate invoicing, multi-system reconciliation, and payment collections directly inside Odoo ERP. Would eliminating manual double-entry between intake and accounting save your team significant overhead each month?`,
+    'REVOPS_CRM': `Hi, Big Binary Tech here. We help ${archetype} teams bridge customer inquiries, CRM pipelines, and automated WhatsApp/SMS notifications directly into Odoo. Is lead drop-off or delayed follow-up currently costing ${name} sales opportunities?`,
+    'HR_PEOPLE': `Hi, Big Binary Tech here. We streamline employee onboarding, time-tracking, and payroll workflows into unified Odoo HR modules with zero double-entry. Are disparate HR and timesheet tools creating administrative drag?`,
+    'TECH_CIO_CTO': `Hi, Big Binary Tech here. We deliver turnkey Odoo ERP deployments and enterprise n8n workflow bridges with guaranteed uptime, direct API connectors, and zero vendor lock-in. Are legacy software silos or custom script maintenance consuming IT resources?`,
+    'RETAIL_RESTAURANT_POS': `Hi, Big Binary Tech here. We help retail and clinic locations sync multi-counter POS transactions, inventory, and accounting into a single real-time Odoo terminal. Would real-time stock sync and automated daily closing save your team hours?`,
+    'MARKETING_GROWTH': `Hi, Big Binary Tech here. We connect customer acquisition campaigns directly into Odoo CRM with automated lead routing and appointment booking. Would automated conversion workflows help ${name} scale faster?`
+  };
+
+  scriptBox.textContent = scripts[personaKey] || scripts['FOUNDER_CEO'];
+};
 
 window.copyCurrentPhone = function() {
   const lead = callerLeads[currentIndex];
