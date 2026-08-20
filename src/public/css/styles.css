@@ -382,6 +382,99 @@ body {
   box-shadow: inset 3px 0 0 #6366f1;
 }
 
+/* Outcome Row Highlighting */
+.leads-table tbody tr.row-interested td {
+  background: rgba(16, 185, 129, 0.09) !important;
+}
+.leads-table tbody tr.row-interested td:first-child {
+  box-shadow: inset 5px 0 0 #10b981 !important;
+}
+.leads-table tbody tr.row-interested:hover td {
+  background: rgba(16, 185, 129, 0.18) !important;
+}
+
+.leads-table tbody tr.row-not-a-fit td {
+  background: rgba(244, 63, 94, 0.09) !important;
+  opacity: 0.85;
+}
+.leads-table tbody tr.row-not-a-fit td:first-child {
+  box-shadow: inset 5px 0 0 #f43f5e !important;
+}
+.leads-table tbody tr.row-not-a-fit:hover td {
+  background: rgba(244, 63, 94, 0.18) !important;
+  opacity: 1;
+}
+
+.leads-table tbody tr.row-callback td,
+.leads-table tbody tr.row-follow-up td {
+  background: rgba(245, 158, 11, 0.09) !important;
+}
+.leads-table tbody tr.row-callback td:first-child,
+.leads-table tbody tr.row-follow-up td:first-child {
+  box-shadow: inset 5px 0 0 #f59e0b !important;
+}
+.leads-table tbody tr.row-callback:hover td,
+.leads-table tbody tr.row-follow-up:hover td {
+  background: rgba(245, 158, 11, 0.18) !important;
+}
+
+.leads-table tbody tr.row-no-answer td {
+  background: rgba(100, 116, 139, 0.04) !important;
+}
+.leads-table tbody tr.row-no-answer td:first-child {
+  box-shadow: inset 3px 0 0 #64748b !important;
+}
+
+/* Status Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.status-interested {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.status-not-a-fit {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+.status-callback {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.status-no-answer {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.status-uncalled {
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.followup-date-tag {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-top: 3px;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  width: fit-content;
+}
+
+
 /* Badges */
 .badge {
   display: inline-block;

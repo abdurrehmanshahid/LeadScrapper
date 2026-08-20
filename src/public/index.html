@@ -164,13 +164,15 @@
         <label class="form-label" style="margin-bottom:0;">Call Status:</label>
         <select id="filterCallStatus" class="form-control" style="width: auto;">
           <option value="ALL">All Statuses</option>
-          <option value="Uncalled">Uncalled</option>
-          <option value="Interested">Interested</option>
-          <option value="Callback Requested">Callback Requested</option>
-          <option value="No Answer / Voicemail">No Answer</option>
-          <option value="Not a Fit">Not a Fit</option>
+          <option value="Interested">✅ Interested</option>
+          <option value="Callback Requested">📅 Callback Requested</option>
+          <option value="FOLLOW_UPS_DUE">⏰ Follow-Ups Scheduled</option>
+          <option value="Not a Fit">❌ Not a Fit</option>
+          <option value="No Answer / Voicemail">📵 No Answer / Voicemail</option>
+          <option value="Uncalled">⚪ Uncalled Only</option>
         </select>
       </div>
+
 
       <div class="filter-group" style="flex-grow: 1; max-width: 520px; display: flex; gap: 0.4rem;">
         <input type="text" id="searchInput" class="form-control" placeholder="🧠 AI Semantic Search (e.g. 'construction in Texas', 'manufacturing')...">

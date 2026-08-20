@@ -102,16 +102,39 @@ function renderLeadsTable(leads = allLeads) {
       `<span style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; color: #cbd5e1; margin-right: 4px;">${t}</span>`
     ).join('');
 
-    let statusColor = '#9ca3af';
-    if (lead.call_status === 'Interested') statusColor = '#34d399';
-    if (lead.call_status === 'Callback Requested') statusColor = '#fbbf24';
+    const status = lead.call_status || 'Uncalled';
+    let rowClass = '';
+    let statusPillClass = 'status-uncalled';
+    let statusIcon = '⚪';
+
+    if (status === 'Interested') {
+      rowClass = 'row-interested';
+      statusPillClass = 'status-interested';
+      statusIcon = '✅';
+    } else if (status === 'Not a Fit' || status === 'Do Not Call' || status === 'Wrong Number') {
+      rowClass = 'row-not-a-fit';
+      statusPillClass = 'status-not-a-fit';
+      statusIcon = '❌';
+    } else if (status === 'Callback Requested' || status === 'Follow Up') {
+      rowClass = 'row-callback';
+      statusPillClass = 'status-callback';
+      statusIcon = '📅';
+    } else if (status === 'No Answer / Voicemail') {
+      rowClass = 'row-no-answer';
+      statusPillClass = 'status-no-answer';
+      statusIcon = '📵';
+    }
+
+    const followUpBadge = lead.follow_up_date 
+      ? `<span class="followup-date-tag" title="Follow-up scheduled">⏰ ${new Date(lead.follow_up_date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>` 
+      : '';
 
     const ratingDisplay = lead.rating
       ? (lead.reviews_count && lead.reviews_count > 0 ? `⭐ ${lead.rating} (${lead.reviews_count} revs)` : `⭐ ${lead.rating} (Star Rating)`)
       : `${lead.employee_size || '11-50'} staff`;
 
     return `
-      <tr onclick="window.location.href='caller.html?id=${lead.id}'" style="cursor: pointer;" title="📞 Click to open direct SDR Caller View">
+      <tr class="${rowClass}" onclick="window.location.href='caller.html?id=${lead.id}'" style="cursor: pointer;" title="📞 Click to open direct SDR Caller View">
         <td>
           <div style="font-weight: 700; color: #f9fafb; font-size: 0.95rem;">${escapeHtml(lead.name)}</div>
           <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(lead.employee_size || '11-50')} staff | ${ratingDisplay}</div>
@@ -134,9 +157,12 @@ function renderLeadsTable(leads = allLeads) {
           <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 2px;">© ${lead.copyright_year || 'Recent'}</div>
         </td>
         <td>
-          <span style="font-size: 0.75rem; font-weight: 700; color: ${statusColor};">
-            ● ${escapeHtml(lead.call_status || 'Uncalled')}
-          </span>
+          <div>
+            <span class="status-pill ${statusPillClass}">
+              ${statusIcon} ${escapeHtml(status)}
+            </span>
+            ${followUpBadge}
+          </div>
         </td>
         <td style="white-space: nowrap;" onclick="event.stopPropagation();">
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openLeadModal('${lead.id}')" style="margin-right: 4px;" title="View battlecard & intelligence">
@@ -153,6 +179,7 @@ function renderLeadsTable(leads = allLeads) {
     `;
   }).join('');
 }
+
 
 window.editLeadDirect = function(id) {
   currentModalLeadId = id;

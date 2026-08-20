@@ -347,7 +347,29 @@ function renderActiveLead() {
 
   const notesEl = document.getElementById('callNotesInput');
   if (notesEl) notesEl.value = lead.notes || '';
+
+  const followUpBadge = document.getElementById('callScheduledFollowUpBadge');
+  if (followUpBadge) {
+    if (lead.follow_up_date) {
+      followUpBadge.textContent = `⏰ Follow-up: ${new Date(lead.follow_up_date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+      followUpBadge.style.display = 'inline-block';
+      followUpBadge.style.color = '#fbbf24';
+      followUpBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      followUpBadge.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+    } else if (lead.call_status && lead.call_status !== 'Uncalled') {
+      const isInterested = lead.call_status === 'Interested';
+      const isNotFit = lead.call_status === 'Not a Fit';
+      followUpBadge.textContent = `${isInterested ? '✅' : isNotFit ? '❌' : '●'} Status: ${lead.call_status}`;
+      followUpBadge.style.display = 'inline-block';
+      followUpBadge.style.color = isInterested ? '#34d399' : isNotFit ? '#fb7185' : '#94a3b8';
+      followUpBadge.style.background = isInterested ? 'rgba(16, 185, 129, 0.15)' : isNotFit ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+      followUpBadge.style.borderColor = isInterested ? 'rgba(16, 185, 129, 0.35)' : isNotFit ? 'rgba(244, 63, 94, 0.35)' : 'rgba(255, 255, 255, 0.1)';
+    } else {
+      followUpBadge.style.display = 'none';
+    }
+  }
 }
+
 
 window.setCallerPersona = function(personaKey) {
   const lead = callerLeads[currentIndex];
@@ -448,31 +470,165 @@ function showToast(message, isSuccess = true) {
   }, 2500);
 }
 
+let pendingOutcomeStatus = null;
+
 window.logOutcome = async function(status) {
   const lead = callerLeads[currentIndex];
   if (!lead) return;
 
-  const notes = document.getElementById('callNotesInput').value;
+  const notes = document.getElementById('callNotesInput').value.trim();
 
+  if (status === 'Interested' || status === 'Callback Requested') {
+    pendingOutcomeStatus = status;
+    openFollowUpModal(status, notes);
+    return;
+  }
+
+  // Not a Fit or No Answer / Voicemail
   try {
-    await fetch(`/api/leads/${lead.id}/status`, {
+    const res = await fetch(`/api/leads/${lead.id}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes })
+      body: JSON.stringify({ status, notes, follow_up_date: null })
     });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to save');
 
     lead.call_status = status;
     lead.notes = notes;
+    lead.follow_up_date = null;
 
-    showToast(`✓ Logged as "${status}" — Advancing to next lead!`);
+    if (status === 'Not a Fit') {
+      showToast(`❌ Marked "${lead.name}" as Not a Fit`);
+    } else {
+      showToast(`📵 Logged No Answer for "${lead.name}"`);
+    }
+
     setTimeout(() => {
       navigateLead(1);
-    }, 400);
+    }, 350);
   } catch (err) {
     console.error('Failed to log outcome:', err);
     showToast('Failed to save status', false);
   }
 };
+
+window.openFollowUpModal = function(status, existingNotes = '') {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const modalTitle = document.getElementById('followUpModalTitle');
+  if (modalTitle) {
+    modalTitle.textContent = status === 'Interested' 
+      ? '✅ Interested — Schedule Follow-Up Meeting' 
+      : '📅 Schedule Callback Requested';
+  }
+  const modalComp = document.getElementById('followUpModalCompany');
+  if (modalComp) {
+    modalComp.textContent = `${lead.name} (${lead.phone || 'No direct phone'})`;
+  }
+
+  // Default datetime to Tomorrow 10:00 AM
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(10, 0, 0, 0);
+  const localIso = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const dateInput = document.getElementById('followUpDateTimeInput');
+  if (dateInput) dateInput.value = localIso;
+
+  const notesInput = document.getElementById('followUpNotesInput');
+  if (notesInput) notesInput.value = existingNotes || lead.notes || '';
+
+  const modal = document.getElementById('followUpModal');
+  if (modal) modal.style.display = 'flex';
+};
+
+window.closeFollowUpModal = function() {
+  const modal = document.getElementById('followUpModal');
+  if (modal) modal.style.display = 'none';
+  pendingOutcomeStatus = null;
+};
+
+window.setFollowUpPreset = function(daysAhead, hour) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(hour, 0, 0, 0);
+  const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const dateInput = document.getElementById('followUpDateTimeInput');
+  if (dateInput) dateInput.value = localIso;
+};
+
+window.confirmFollowUpSchedule = async function() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const status = pendingOutcomeStatus || 'Interested';
+  const followUpIso = document.getElementById('followUpDateTimeInput')?.value;
+  const notes = (document.getElementById('followUpNotesInput')?.value || '').trim();
+
+  const followUpDate = followUpIso ? new Date(followUpIso).toISOString() : null;
+
+  try {
+    const res = await fetch(`/api/leads/${lead.id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, notes, follow_up_date: followUpDate })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to save');
+
+    lead.call_status = status;
+    lead.notes = notes;
+    lead.follow_up_date = followUpDate;
+
+    closeFollowUpModal();
+
+    const formattedDate = followUpDate 
+      ? new Date(followUpDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Saved';
+    showToast(`✅ "${lead.name}" scheduled for follow-up on ${formattedDate}!`);
+
+    setTimeout(() => {
+      navigateLead(1);
+    }, 400);
+  } catch (err) {
+    console.error('Failed to schedule follow up:', err);
+    showToast('Failed to schedule follow-up', false);
+  }
+};
+
+window.confirmSaveOutcomeWithoutSchedule = async function() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const status = pendingOutcomeStatus || 'Interested';
+  const notes = (document.getElementById('followUpNotesInput')?.value || '').trim();
+
+  try {
+    const res = await fetch(`/api/leads/${lead.id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, notes, follow_up_date: null })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to save');
+
+    lead.call_status = status;
+    lead.notes = notes;
+    lead.follow_up_date = null;
+
+    closeFollowUpModal();
+    showToast(`✓ Logged as "${status}" for "${lead.name}"`);
+
+    setTimeout(() => {
+      navigateLead(1);
+    }, 350);
+  } catch (err) {
+    console.error('Failed to save status:', err);
+    showToast('Failed to save status', false);
+  }
+};
+
 
 // ─── Manual Enrichment ────────────────────────────────────────────────────────
 

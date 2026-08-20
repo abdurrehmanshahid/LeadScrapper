@@ -32,7 +32,15 @@ app.get('/api/leads', async (req, res) => {
 
     if (category && category !== 'ALL') leads = leads.filter(l => l.category === category);
     if (min_score) leads = leads.filter(l => (l.success_chance_pct || 0) >= parseInt(min_score, 10));
-    if (call_status && call_status !== 'ALL') leads = leads.filter(l => l.call_status === call_status);
+    if (call_status && call_status !== 'ALL') {
+      if (call_status === 'FOLLOW_UPS_DUE') {
+        leads = leads.filter(l => Boolean(l.follow_up_date));
+      } else if (call_status === 'UNCALLED' || call_status === 'Uncalled') {
+        leads = leads.filter(l => !l.call_status || l.call_status === 'Uncalled');
+      } else {
+        leads = leads.filter(l => (l.call_status || '').toLowerCase() === call_status.toLowerCase());
+      }
+    }
     if (search && search.trim()) leads = await searchLeads(search, leads);
 
     res.json({ count: leads.length, leads });
@@ -52,18 +60,19 @@ app.get('/api/leads/:id', async (req, res) => {
   }
 });
 
-// 3. Update Call Status & Notes
+// 3. Update Call Status, Notes & Follow-Up Scheduling
 app.post('/api/leads/:id/status', async (req, res) => {
   try {
-    const { status, notes } = req.body;
+    const { status, notes, follow_up_date } = req.body;
     if (!status) return res.status(400).json({ error: 'Status is required' });
-    const updated = await db.updateLeadStatus(req.params.id, status, notes || '');
+    const updated = await db.updateLeadStatus(req.params.id, status, notes || '', follow_up_date || null);
     if (!updated) return res.status(404).json({ error: 'Lead not found' });
     res.json({ success: true, lead: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // 4. Manual Enrichment — patch any contact fields on a lead
 app.patch('/api/leads/:id', async (req, res) => {
@@ -538,18 +547,22 @@ app.get('/api/stats', async (_req, res) => {
     const leads = await db.getAllLeads();
     const logs  = await db.getCallLogs();
     res.json({
-      total_leads:       leads.length,
-      new_implementations: leads.filter(l => l.category === 'NEW_IMPLEMENTATION').length,
-      bpo_rescues:       leads.filter(l => l.category === 'BPO_RESCUE').length,
-      high_fit_leads:    leads.filter(l => (l.success_chance_pct || 0) >= 75).length,
-      called_count:      leads.filter(l => l.call_status && l.call_status !== 'Uncalled').length,
-      interested_count:  leads.filter(l => l.call_status === 'Interested').length,
-      call_logs:         logs.slice(0, 10)
+      total_leads:          leads.length,
+      new_implementations:  leads.filter(l => l.category === 'NEW_IMPLEMENTATION').length,
+      bpo_rescues:          leads.filter(l => l.category === 'BPO_RESCUE').length,
+      high_fit_leads:       leads.filter(l => (l.success_chance_pct || 0) >= 75).length,
+      called_count:         leads.filter(l => l.call_status && l.call_status !== 'Uncalled').length,
+      interested_count:     leads.filter(l => l.call_status === 'Interested').length,
+      not_a_fit_count:      leads.filter(l => l.call_status === 'Not a Fit').length,
+      callback_count:       leads.filter(l => l.call_status === 'Callback Requested' || l.call_status === 'Follow Up').length,
+      follow_ups_due_count: leads.filter(l => Boolean(l.follow_up_date)).length,
+      call_logs:            logs.slice(0, 10)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // 10. Export CSV
 app.get('/api/export/csv', async (_req, res) => {

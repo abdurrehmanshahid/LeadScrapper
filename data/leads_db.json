@@ -75,7 +75,7 @@
         }
       ]
     },
-    "call_status": "Uncalled",
+    "call_status": "Interested",
     "case_study_fit": {
       "matched_case_study": "Wholesale & Inventory Automation",
       "case_study_id": "case_wholesale_distribution",
@@ -233,10 +233,13 @@
       "WordPress",
       "WooCommerce"
     ],
-    "updatedAt": "2026-08-19T22:28:49.626Z",
-    "updated_at": "2026-08-19T22:28:49.625Z",
+    "updatedAt": "2026-08-20T21:49:48.624Z",
+    "updated_at": "2026-08-20T21:49:48.624Z",
     "website": "https://www.fiestamart.com/",
-    "manually_enriched": true
+    "manually_enriched": true,
+    "follow_up_date": "2026-08-21T21:49:48.551Z",
+    "last_called_at": "2026-08-20T21:49:48.624Z",
+    "notes": "Spoke with Operations Director; scheduled demo for tomorrow morning."
   },
   {
     "_id": "6a86288769e2d148cf3e48b6",
@@ -314,7 +317,7 @@
         }
       ]
     },
-    "call_status": "Uncalled",
+    "call_status": "Not a Fit",
     "case_study_fit": {
       "matched_case_study": "Wholesale & Inventory Automation",
       "case_study_id": "case_wholesale_distribution",
@@ -410,9 +413,12 @@
     "tech_stack": [
       "Custom HTML / Static Stack"
     ],
-    "updatedAt": "2026-08-19T22:04:53.901Z",
-    "updated_at": "2026-08-19T22:04:53.900Z",
-    "website": "http://pyburnswatkins.com/"
+    "updatedAt": "2026-08-20T21:49:48.854Z",
+    "updated_at": "2026-08-20T21:49:48.853Z",
+    "website": "http://pyburnswatkins.com/",
+    "follow_up_date": null,
+    "last_called_at": "2026-08-20T21:49:48.853Z",
+    "notes": "Has internal in-house ERP team, no external budget."
   },
   {
     "_id": "6a86286b69e2d148cf3e48b5",
@@ -4780,8 +4786,8 @@
     "tech_stack": [
       "Custom HTML / Static Stack"
     ],
-    "updatedAt": "2026-08-19T20:12:22.974Z",
-    "updated_at": "2026-08-19T20:12:22.736Z",
+    "updatedAt": "2026-08-20T19:32:54.970Z",
+    "updated_at": "2026-08-20T19:32:54.969Z",
     "website": "https://www.stdavids.com/locations/st-davids-medical-center?utm_campaign=corp_listings_mgmt&utm_source=google&utm_medium=business_listing",
     "last_audited_at": "2026-08-19T20:12:22.736Z",
     "manually_enriched": true

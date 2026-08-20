@@ -212,12 +212,13 @@ class Database {
     return this._leads[idx];
   }
 
-  async updateLeadStatus(id, status, notes = '') {
+  async updateLeadStatus(id, status, notes = '', followUpDate = null) {
     const lead = await this.getLeadById(id);
     if (!lead) return null;
 
     lead.call_status    = status;
     lead.notes          = notes;
+    lead.follow_up_date = followUpDate !== undefined ? followUpDate : (lead.follow_up_date || null);
     lead.last_called_at = new Date().toISOString();
     lead.updated_at     = new Date().toISOString();
 
@@ -228,6 +229,7 @@ class Database {
       phone: lead.phone,
       status,
       notes,
+      follow_up_date: lead.follow_up_date,
       timestamp: new Date().toISOString()
     };
 
@@ -236,6 +238,7 @@ class Database {
         $set: {
           call_status:    lead.call_status,
           notes:          lead.notes,
+          follow_up_date: lead.follow_up_date,
           last_called_at: lead.last_called_at,
           updated_at:     lead.updated_at
         }
