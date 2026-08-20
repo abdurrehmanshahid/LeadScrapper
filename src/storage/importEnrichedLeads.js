@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db/database');
+const { generateBattlecard } = require('../pitch/battlecardGenerator');
 
 async function importEnrichedLeads() {
   const jsonPath = path.resolve(__dirname, '../../enriched_odoo_leads.json');
@@ -19,6 +20,7 @@ async function importEnrichedLeads() {
   await db.connect();
 
   let importedCount = 0;
+  const currentYear = new Date().getFullYear();
 
   for (const item of enrichedList) {
     const firm = item.firmographics || {};
@@ -37,13 +39,17 @@ async function importEnrichedLeads() {
       verified: true
     }));
 
+    const successPct = opp.success_chance_percentage || 70;
+    const fullAddress = loc.full_address || 'USA';
+
     const standardizedLead = {
       id: item.lead_id || `lead_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       name: item.company_name || 'Unnamed Company',
       industry: firm.industry || 'General Business',
       business_archetype: firm.business_archetype || 'Commercial Enterprise',
       employee_size: firm.employee_size || '1-10',
-      location: loc.full_address || 'USA',
+      location: fullAddress,
+      address: fullAddress,
       website: firm.website || '',
       domain: firm.domain || '',
       phone: firm.phone || '',
@@ -62,7 +68,8 @@ async function importEnrichedLeads() {
       category: opp.category || 'NEW_IMPLEMENTATION',
       deal_type: opp.deal_type || 'Turnkey Odoo ERP Implementation',
       fit_tier: opp.fit_tier || 'Solid Opportunity (Tier 2)',
-      success_chance: opp.success_chance_percentage || 70,
+      success_chance: successPct,
+      success_chance_pct: successPct,
       estimated_deal_tier: opp.estimated_deal_tier || '$25,000 - $75,000 (Full Implementation)',
       priority_score: opp.priority_score || 60,
 
@@ -81,10 +88,33 @@ async function importEnrichedLeads() {
       pitch_hook: playbook.custom_pitch_hook || '',
       action_plan_roadmap: playbook.action_plan_roadmap || [],
 
+      // Features for ML & Battlecard Generator
+      features: {
+        industry: (firm.industry || 'general business').toLowerCase(),
+        sizeBucket: firm.employee_size || '1-10',
+        copyrightAge: rep.copyright_year ? Math.max(0, currentYear - parseInt(rep.copyright_year)) : 2,
+        reviewsCount: rep.reviews_count || 0,
+        rating: rep.public_rating || 4.5,
+        hasOdoo: (opp.category === 'BPO_RESCUE'),
+        isLegacyOdoo: false,
+        hasWordPress: false,
+        hasLegacyCMS: false,
+        noPortal: true,
+        noSSL: false,
+        loadTimeSec: 1.8
+      },
+
+      // Deep Intel
+      deep_intel: item.deep_intel || null,
+
       // Status
+      call_status: 'Uncalled',
       status: 'NEW',
       updated_at: new Date().toISOString()
     };
+
+    // Generate Battlecard
+    standardizedLead.battlecard = generateBattlecard(standardizedLead);
 
     await db.upsertLead(standardizedLead);
     importedCount++;
@@ -93,6 +123,7 @@ async function importEnrichedLeads() {
   console.log(`✅ Successfully imported and synchronized ${importedCount} AI-enriched leads!`);
   return importedCount;
 }
+
 
 if (require.main === module) {
   importEnrichedLeads().then(() => {

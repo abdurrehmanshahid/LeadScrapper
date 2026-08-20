@@ -68,6 +68,12 @@ if not exist "node_modules\" (
 if not exist ".env" (
     if exist ".env.example" copy ".env.example" ".env" >nul 2>nul
     echo [i] Created default .env file.
+) else (
+    findstr /C:"cluster0.xxxxx.mongodb.net" ".env" >nul 2>nul
+    if %errorlevel% equ 0 (
+        if exist ".env.example" copy /Y ".env.example" ".env" >nul 2>nul
+        echo [i] Fixed outdated placeholder .env with active cluster URI.
+    )
 )
 
 :: 7. Auto-tunnel via ngrok so Clay can POST enrichment callbacks back in real-time

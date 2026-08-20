@@ -34,12 +34,25 @@
         <span style="font-size: 0.7rem; color: var(--text-dim); margin-left: 4px;">Keys: ←→ navigate · 1 Interested · 2 Callback · 3 No Answer · 4 Not a Fit</span>
       </div>
 
-      <div style="display: flex; gap: 0.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
         <select id="callerCategoryFilter" class="form-control" style="width: auto; padding: 0.35rem 0.65rem; font-size: 0.8rem;">
           <option value="ALL">All Categories</option>
           <option value="NEW_IMPLEMENTATION">New Implementation</option>
           <option value="BPO_RESCUE">Odoo BPO / Rescue</option>
         </select>
+        <select id="callerSizeFilter" class="form-control" style="width: auto; padding: 0.35rem 0.65rem; font-size: 0.8rem;">
+          <option value="ALL">All Sizes</option>
+          <option value="small">Small (1–50)</option>
+          <option value="medium">Medium (51–250)</option>
+          <option value="large">Large (251+)</option>
+          <option value="out_of_scope">Too Large — Hidden</option>
+        </select>
+        <label title="Import verified contacts from a Clay CSV export" style="cursor:pointer;">
+          <input type="file" id="clayCsvInput" accept=".csv" style="display:none;" onchange="importClayCsv(this)">
+          <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);color:#60a5fa;border-radius:6px;padding:0.3rem 0.7rem;font-size:0.75rem;font-weight:700;cursor:pointer;" onmouseover="this.style.background='rgba(96,165,250,0.2)'" onmouseout="this.style.background='rgba(96,165,250,0.1)'">
+            📥 Import Clay CSV
+          </span>
+        </label>
       </div>
     </div>
 
@@ -61,6 +74,7 @@
           <div>
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
               <span id="callCategoryBadge" class="badge badge-new">NEW_IMPLEMENTATION</span>
+              <span id="callSizeBadge" style="font-size: 0.72rem; font-weight: 700; margin-left: 2px; opacity: 0.9;"></span>
               <span id="callScorePill" class="score-pill score-high">🎯 88% Success Chance</span>
               <button id="callerLiveAuditBtn" onclick="runCallerLiveAudit()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #f59e0b; border-color: rgba(245,158,11,0.5); cursor: pointer;" title="Crawls live website & negative customer reviews right now and re-synthesizes the pitch">⚡ Live Tech & Review Audit</button>
               <button onclick="openEditModal()" class="btn btn-accent btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; cursor: pointer;">✏️ Edit</button>
@@ -333,38 +347,38 @@
     </div>
   </div>
 
-  <!-- Live Tech & Review Audit Findings Modal -->
+  <!-- Live Web Tech Audit Modal -->
   <div id="liveAuditModal" class="modal-overlay" style="display: none; z-index: 10000;">
-    <div class="modal-content" style="max-width: 820px; max-height: 90vh; overflow-y: auto; background: #0b1329; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+    <div class="modal-content" style="max-width: 860px; max-height: 90vh; overflow-y: auto; background: #0b1329; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
         <div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.4rem;">⚡</span>
-            <h2 id="auditModalTitle" style="font-size: 1.3rem; font-weight: 800; color: #fbbf24; margin: 0;">Live Tech & Negative Review Audit</h2>
+            <h2 id="auditModalTitle" style="font-size: 1.3rem; font-weight: 800; color: #fbbf24; margin: 0;">Live Web Tech Audit</h2>
           </div>
-          <p id="auditModalSubtitle" style="font-size: 0.8rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Real-time technographic diagnostics & customer review friction scan</p>
+          <p id="auditModalSubtitle" style="font-size: 0.8rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Real-time website technographic scan — load time, tech stack, security, update year</p>
         </div>
         <button onclick="closeLiveAuditModal()" style="background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer;">&times;</button>
       </div>
 
       <!-- Diagnostic Grid -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
-        <!-- Left: Web Tech Vulnerabilities -->
+        <!-- Left: Web Tech Metrics -->
         <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 1rem;">
           <div style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span>🌐</span> Web Tech & Infrastructure Health
+            <span>🌐</span> Website Health & Infrastructure
           </div>
           <div id="auditTechMetrics" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem;">
             <!-- Rendered by JS -->
           </div>
         </div>
 
-        <!-- Right: Customer Review Friction ("Bad Stuff") -->
-        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 8px; padding: 1rem;">
-          <div style="font-size: 0.8rem; font-weight: 700; color: #f43f5e; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span>😡</span> Customer Negative Voice & Complaints
+        <!-- Right: New Signals Checklist -->
+        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 1rem;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>📋</span> New Signals — Select to Add to Battlecard
           </div>
-          <div id="auditReviewQuotes" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem; max-height: 180px; overflow-y: auto;">
+          <div id="auditNewFindings" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem; max-height: 220px; overflow-y: auto;">
             <!-- Rendered by JS -->
           </div>
         </div>
@@ -373,7 +387,7 @@
       <!-- Re-synthesized Pitch Hook Preview -->
       <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
         <div style="font-size: 0.8rem; font-weight: 700; color: #34d399; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
-          <span>🎯</span> Dynamically Re-Synthesized Consultative Pitch
+          <span>🎯</span> Re-Synthesized Consultative Pitch
         </div>
         <div id="auditPitchPreview" style="font-size: 0.875rem; color: #f1f5f9; line-height: 1.5; font-style: italic; background: rgba(0,0,0,0.3); padding: 0.75rem 1rem; border-radius: 6px; border-left: 3px solid #10b981;">
           <!-- Rendered by JS -->
@@ -382,11 +396,11 @@
 
       <!-- Action Footer -->
       <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem;">
-        <span style="font-size: 0.75rem; color: #64748b;">Findings are backed by live website scrape + Yelp/GMB review NLP</span>
+        <span style="font-size: 0.75rem; color: #64748b;">AI-enriched profile data is never overwritten — only checked signals are merged</span>
         <div style="display: flex; gap: 0.75rem;">
-          <button type="button" onclick="closeLiveAuditModal()" class="btn btn-secondary">Keep Current</button>
-          <button type="button" onclick="applyLiveAuditFindings()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
-            ✅ Apply & Update Company Context
+          <button type="button" onclick="closeLiveAuditModal()" class="btn btn-secondary">Ignore All</button>
+          <button type="button" onclick="applyLiveAuditFindings()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;">
+            Apply Selected to Battlecard
           </button>
         </div>
       </div>

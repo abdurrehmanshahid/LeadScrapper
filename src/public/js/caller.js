@@ -3,6 +3,15 @@
 let callerLeads = [];
 let currentIndex = 0;
 
+function getSizeTier(lead) {
+  if (lead.out_of_scope) return 'out_of_scope';
+  const s = (lead.employee_size || lead.firmographics?.employee_size || '').toLowerCase().replace(/\s/g, '');
+  if (/^(1-10|1–10|11-50|11–50|1-50)/.test(s)) return 'small';
+  if (/^(51-200|51–200|51-250|51–250|201-250)/.test(s)) return 'medium';
+  if (/^(201-500|251-500|501|251-1|500\+|1000\+|5000\+|10000\+)/.test(s) || parseInt(s) > 250) return 'large';
+  return 'small'; // default unknown to small so they stay visible
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetId = urlParams.get('id');
@@ -12,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('prevLeadBtn').addEventListener('click', () => navigateLead(-1));
   document.getElementById('nextLeadBtn').addEventListener('click', () => navigateLead(1));
   document.getElementById('callerCategoryFilter').addEventListener('change', () => loadCallerLeads());
+  document.getElementById('callerSizeFilter')?.addEventListener('change', () => loadCallerLeads());
 
   // Keyboard shortcuts — only when not typing in the notes input
   document.addEventListener('keydown', (e) => {
@@ -27,13 +37,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadCallerLeads(targetId = null) {
   const category = document.getElementById('callerCategoryFilter').value;
+  const sizeFilter = document.getElementById('callerSizeFilter')?.value || 'ALL';
   const params = new URLSearchParams();
   if (category !== 'ALL') params.append('category', category);
 
   try {
     const res = await fetch(`/api/leads?${params.toString()}`);
     const data = await res.json();
-    callerLeads = data.leads || [];
+    let leads = data.leads || [];
+
+    // Size filter — applied client-side using getSizeTier()
+    if (sizeFilter !== 'ALL') {
+      leads = leads.filter(l => getSizeTier(l) === sizeFilter);
+    } else {
+      // Default: hide out_of_scope unless explicitly selected
+      leads = leads.filter(l => getSizeTier(l) !== 'out_of_scope');
+    }
+
+    callerLeads = leads;
 
     if (callerLeads.length === 0) {
       document.getElementById('noLeadsMessage').style.display = 'block';
@@ -78,7 +99,20 @@ function renderActiveLead() {
   catBadge.className = isRescue ? 'badge badge-rescue' : 'badge badge-new';
 
   const scorePill = document.getElementById('callScorePill');
-  scorePill.textContent = `🎯 ${lead.success_chance_pct || 80}% Success Chance (${lead.fit_tier || 'High'})`;
+  const successChance = lead.success_chance_pct || lead.success_chance || lead.opportunity?.success_chance_percentage || 70;
+  scorePill.textContent = `🎯 ${successChance}% Success Chance (${lead.fit_tier || lead.opportunity?.fit_tier || 'Solid Opportunity'})`;
+
+  // Size badge
+  const sizeTier = getSizeTier(lead);
+  const sizeBadgeEl = document.getElementById('callSizeBadge');
+  if (sizeBadgeEl) {
+    const sizeLabels = { small: '🟢 Small', medium: '🟡 Medium', large: '🔴 Large', out_of_scope: '⛔ Too Large' };
+    const sizeColors = { small: '#22c55e', medium: '#f59e0b', large: '#ef4444', out_of_scope: '#7c3aed' };
+    sizeBadgeEl.textContent = sizeLabels[sizeTier] || sizeTier;
+    sizeBadgeEl.style.color = sizeColors[sizeTier] || '#94a3b8';
+    sizeBadgeEl.style.display = 'inline';
+    if (lead.out_of_scope_reason) sizeBadgeEl.title = lead.out_of_scope_reason;
+  }
 
   document.getElementById('callCompanyName').textContent = lead.name;
   const callerMetaParts = [
@@ -115,26 +149,33 @@ function renderActiveLead() {
       : '';
   }
 
-  // Decision Makers
-  const dms = lead.decision_makers || [];
+  // Decision Makers — reads flat field or raw JSON field name
+  const dms = (lead.decision_makers?.length && lead.decision_makers)
+    || (lead.decision_maker_contacts?.length && lead.decision_maker_contacts.map(dm => ({
+        name: dm.name, title: dm.title, email_guess: dm.email || dm.email_guess
+      })))
+    || [];
   const dmSection = document.getElementById('callDecisionMakersSection');
   if (dmSection) dmSection.style.display = 'block';
   const dmContainer = document.getElementById('callDecisionMakers');
   if (dmContainer) {
     if (dms.length > 0) {
-      dmContainer.innerHTML = dms.map(dm => {
+      dmContainer.innerHTML = dms.map((dm, idx) => {
         const safeName = (dm.name || 'Executive').replace(/'/g, "\\'");
+        const isAiGuess = dm.source === 'gemini_ai_enrichment' || dm.verified === false;
         const linkedinBtn = dm.linkedin_url
           ? `<a href="${escapeHtml(dm.linkedin_url)}" target="_blank" style="font-size: 0.7rem; color: #818cf8; text-decoration: none; margin-left: 6px;">🔗 LinkedIn ↗</a>`
           : '';
+        const guessBadge = isAiGuess
+          ? `<span style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:1px 5px;border-radius:4px;font-size:0.62rem;font-weight:800;margin-left:5px;" title="AI guessed — not verified">AI GUESS</span>`
+          : '';
         const emailHint = dm.email_guess
-          ? `<div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">✉ ${escapeHtml(dm.email_guess)}</div>`
+          ? `<div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">✉ ${escapeHtml(dm.email_guess)}${isAiGuess ? ' <span style="color:#fbbf24;font-size:0.6rem;">(unverified)</span>' : ''}</div>`
           : '';
         return `
-          <div style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3); border-radius: 8px; padding: 0.6rem 0.9rem; cursor: pointer;"
-            onclick="navigator.clipboard.writeText('${safeName}'); showToast('📋 ${safeName} copied!');"
-            title="Click to copy name to clipboard">
-            <div style="font-weight: 700; color: #f1f5f9; font-size: 0.875rem;">${escapeHtml(dm.name)} ${linkedinBtn}</div>
+          <div style="background: rgba(167,139,250,0.1); border: 1px solid ${isAiGuess ? 'rgba(251,191,36,0.25)' : 'rgba(167,139,250,0.3)'}; border-radius: 8px; padding: 0.6rem 0.9rem; position: relative;">
+            <button onclick="removeDecisionMaker(${idx})" title="Remove this contact" style="position:absolute;top:5px;right:6px;background:none;border:none;color:#475569;cursor:pointer;font-size:0.75rem;line-height:1;padding:2px 4px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">✕</button>
+            <div style="font-weight: 700; color: #f1f5f9; font-size: 0.875rem; cursor:pointer;" onclick="navigator.clipboard.writeText('${safeName}'); showToast('📋 ${safeName} copied!');" title="Click to copy">${escapeHtml(dm.name)}${guessBadge}${linkedinBtn}</div>
             <div style="font-size: 0.775rem; color: #a78bfa;">${escapeHtml(dm.title || 'Decision Maker')}</div>
             ${emailHint}
           </div>`;
@@ -187,19 +228,20 @@ function renderActiveLead() {
   }
   const dealTierEl = document.getElementById('callDealTierBadge');
   if (dealTierEl) {
-    dealTierEl.textContent = `💰 ${lead.estimated_deal_tier || lead.opportunity?.estimated_deal_tier || '$25,000 - $75,000'}`;
+    dealTierEl.textContent = `💰 ${lead.estimated_deal_tier || lead.opportunity?.estimated_deal_tier || lead.deal_type || '$25,000 - $75,000'}`;
   }
   const archetypeEl = document.getElementById('callArchetypeBadge');
   if (archetypeEl) {
-    archetypeEl.textContent = `🏢 ${lead.business_archetype || lead.industry || 'Healthcare & Commercial'}`;
+    archetypeEl.textContent = `🏢 ${lead.business_archetype || lead.firmographics?.business_archetype || lead.industry || 'Healthcare & Commercial'}`;
   }
 
-  // Recommended Odoo Modules
+  // Recommended Odoo Modules — reads flat field, nested odoo_playbook, or nested odoo_sales_playbook
   const modulesContainer = document.getElementById('callRecommendedModules');
   if (modulesContainer) {
-    const modules = lead.recommended_modules || lead.odoo_playbook?.recommended_odoo_modules || [
-      'Odoo Appointments', 'Odoo Invoicing & Accounting', 'Odoo CRM', 'Odoo Documents', 'Odoo Helpdesk'
-    ];
+    const modules = (lead.recommended_modules?.length && lead.recommended_modules)
+      || (lead.odoo_playbook?.recommended_odoo_modules?.length && lead.odoo_playbook.recommended_odoo_modules)
+      || (lead.odoo_sales_playbook?.recommended_odoo_modules?.length && lead.odoo_sales_playbook.recommended_odoo_modules)
+      || ['Odoo CRM', 'Odoo Invoicing & Accounting', 'Odoo Documents', 'Odoo Helpdesk', 'Odoo Appointments'];
     modulesContainer.innerHTML = modules.map(m => `
       <span style="background: rgba(99,102,241,0.2); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.4); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.775rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
         📦 ${escapeHtml(m)}
@@ -207,17 +249,20 @@ function renderActiveLead() {
     `).join('');
   }
 
-  // 6-Phase Roadmap
+  // 6-Phase Roadmap — reads flat field, nested odoo_playbook, or nested odoo_sales_playbook
   const roadmapContainer = document.getElementById('callRoadmapList');
   if (roadmapContainer) {
-    const roadmap = lead.action_plan_roadmap || lead.odoo_playbook?.action_plan_roadmap || [
-      'Phase 1: Business Process Mapping & Gap Analysis',
-      'Phase 2: Odoo Enterprise Instance Setup & Chart of Accounts Configuration',
-      'Phase 3: Legacy Data Cleansing & Migration',
-      'Phase 4: Custom Workflow Automation & 3rd-party App Integrations',
-      'Phase 5: User Acceptance Testing (UAT) & Staff Training',
-      'Phase 6: Go-Live Support & Ongoing Optimization'
-    ];
+    const roadmap = (lead.action_plan_roadmap?.length && lead.action_plan_roadmap)
+      || (lead.odoo_playbook?.action_plan_roadmap?.length && lead.odoo_playbook.action_plan_roadmap)
+      || (lead.odoo_sales_playbook?.action_plan_roadmap?.length && lead.odoo_sales_playbook.action_plan_roadmap)
+      || [
+          'Phase 1: Business Process Mapping & Gap Analysis',
+          'Phase 2: Odoo Enterprise Instance Setup & Chart of Accounts Configuration',
+          'Phase 3: Legacy Data Cleansing & Migration',
+          'Phase 4: Custom Workflow Automation & 3rd-party App Integrations',
+          'Phase 5: User Acceptance Testing (UAT) & Staff Training',
+          'Phase 6: Go-Live Support & Ongoing Optimization'
+        ];
     roadmapContainer.innerHTML = roadmap.map(r => `
       <div style="display: flex; align-items: baseline; gap: 6px; line-height: 1.4;">
         <span style="color: #38bdf8; font-weight: 800;">•</span>
@@ -226,19 +271,56 @@ function renderActiveLead() {
     `).join('');
   }
 
-  // Problem Analysis (AI-Enriched Customer & Operational Gaps)
+  // Problem Analysis — structured problems with review counts and Odoo fixes
   const problemList = document.getElementById('callProblemList');
   if (problemList) {
-    const bc = lead.battlecard || {};
-    const problems = (lead.customer_pain_points && lead.customer_pain_points.length > 0)
-      ? [...lead.customer_pain_points, ...(lead.operational_bottlenecks || [])]
-      : (bc.problem_analysis && bc.problem_analysis.length > 0
-        ? bc.problem_analysis
-        : [
-            `Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
-            `Operating on manual spreadsheets/disconnected accounting.`
-          ]);
-    problemList.innerHTML = problems.map(p => `<li>${escapeHtml(p)}</li>`).join('');
+    const riskLevel = lead.risk_level || lead.problem_analysis?.risk_level || lead.problem_and_sentiment_analysis?.risk_level || '';
+
+    // Try structured identified_problems first
+    const structured = lead.identified_problems
+      || lead.problem_analysis?.identified_problems
+      || lead.problem_and_sentiment_analysis?.identified_problems
+      || [];
+
+    if (structured.length > 0) {
+      const riskBadge = riskLevel
+        ? `<div style="margin-bottom:8px;"><span style="background:rgba(244,63,94,0.15);color:#f87171;border:1px solid rgba(244,63,94,0.35);padding:1px 7px;border-radius:4px;font-size:0.7rem;font-weight:800;text-transform:uppercase;">Risk: ${escapeHtml(riskLevel)}</span></div>`
+        : '';
+      problemList.innerHTML = riskBadge + structured.map(p => `
+        <div style="margin-bottom:12px; padding:10px 12px; background:rgba(0,0,0,0.2); border-left:3px solid rgba(248,113,113,0.5); border-radius:0 6px 6px 0;">
+          <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:5px;">
+            <span style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:1px 6px;border-radius:10px;font-size:0.68rem;font-weight:800;white-space:nowrap;flex-shrink:0;">${p.review_count || '?'} reviews</span>
+            <span style="font-size:0.82rem;color:#e2e8f0;font-weight:600;">${escapeHtml(p.problem || '')}</span>
+          </div>
+          ${p.review_evidence ? `<div style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-bottom:5px;padding-left:2px;">"${escapeHtml(p.review_evidence)}"</div>` : ''}
+          <div style="display:flex;align-items:flex-start;gap:5px;">
+            <span style="color:#818cf8;font-size:0.7rem;font-weight:800;flex-shrink:0;margin-top:1px;">→ ODOO FIX:</span>
+            <span style="font-size:0.75rem;color:#a5b4fc;">${escapeHtml(p.odoo_fix || '')}</span>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      // Fallback: flat arrays (legacy enriched leads)
+      const painPoints = lead.customer_pain_points
+        || lead.problem_analysis?.customer_patient_pain_points
+        || lead.problem_and_sentiment_analysis?.customer_patient_pain_points
+        || [];
+      const bottlenecks = lead.operational_bottlenecks
+        || lead.problem_analysis?.internal_operational_bottlenecks
+        || lead.problem_and_sentiment_analysis?.internal_operational_bottlenecks
+        || [];
+      const bc = lead.battlecard || {};
+      const problems = painPoints.length > 0
+        ? [...painPoints, ...bottlenecks]
+        : (bc.problem_analysis?.length > 0 ? bc.problem_analysis
+            : [`Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
+               `Operating on manual spreadsheets/disconnected accounting.`]);
+
+      const riskBadge = riskLevel
+        ? `<div style="margin-bottom:8px;"><span style="background:rgba(244,63,94,0.15);color:#f87171;border:1px solid rgba(244,63,94,0.35);padding:1px 7px;border-radius:4px;font-size:0.7rem;font-weight:800;text-transform:uppercase;">Risk: ${escapeHtml(riskLevel)}</span></div>`
+        : '';
+      problemList.innerHTML = riskBadge + `<ul style="margin:0;padding-left:1.2rem;">` + problems.map(p => `<li style="margin-bottom:5px;font-size:0.82rem;">${escapeHtml(p)}</li>`).join('') + `</ul>`;
+    }
   }
 
   // Set Persona Script
@@ -291,7 +373,10 @@ window.setCallerPersona = function(personaKey) {
   const scriptBox = document.getElementById('callScriptBox');
   if (!scriptBox) return;
 
-  const hook = lead.pitch_hook || lead.odoo_playbook?.custom_pitch_hook || '';
+  const hook = lead.pitch_hook
+    || lead.odoo_playbook?.custom_pitch_hook
+    || lead.odoo_sales_playbook?.custom_pitch_hook
+    || '';
   const archetype = lead.business_archetype || lead.industry || 'operations';
   const name = lead.name || 'your company';
 
@@ -434,6 +519,46 @@ window.saveNewContact = async function() {
   }
 };
 
+window.importClayCsv = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  input.value = '';
+
+  showToast('Importing Clay CSV…');
+  try {
+    const res = await fetch('/api/leads/import-clay-csv', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    showToast(`✓ ${data.matched} contacts imported (${data.skipped} skipped)`);
+    // Refresh current lead card if it was affected
+    await loadCallerLeads(callerLeads[currentIndex]?.id);
+  } catch (err) {
+    showToast(`Import failed: ${err.message}`, false);
+  }
+};
+
+window.removeDecisionMaker = async function(idx) {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const updatedDMs = (lead.decision_makers || []).filter((_, i) => i !== idx);
+  try {
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision_makers: updatedDMs })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    lead.decision_makers = updatedDMs;
+    renderActiveLead();
+    showToast('Contact removed');
+  } catch (err) {
+    showToast('Failed to remove contact', false);
+  }
+};
+
 window.saveEditedPhone = async function() {
   const lead = callerLeads[currentIndex];
   if (!lead) return;
@@ -466,7 +591,7 @@ function renderIntelDossier(lead) {
   const yelpRow = document.getElementById('callIntelYelpRow');
 
   const intel = lead.deep_intel;
-  if (!intel) { section.style.display = 'none'; return; }
+  if (!intel) { if (section) section.style.display = 'none'; return; }
 
   const tiles = [];
 
@@ -513,9 +638,9 @@ function renderIntelDossier(lead) {
     tiles.push({ icon: count > 5 ? '⚠️' : '📝', label: 'BBB Complaints', value: count === 0 ? 'None on record' : `${count} complaint${count !== 1 ? 's' : ''} filed` });
   }
 
-  if (tiles.length === 0) { section.style.display = 'none'; return; }
+  if (tiles.length === 0) { if (section) section.style.display = 'none'; return; }
 
-  grid.innerHTML = tiles.map(t => `
+  if (grid) grid.innerHTML = tiles.map(t => `
     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; padding: 0.55rem 0.8rem;">
       <div style="font-size: 0.68rem; color: #6ee7b7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem;">${t.icon} ${escapeHtml(t.label)}</div>
       <div style="font-size: 0.8rem; color: #e2e8f0; line-height: 1.35;">${escapeHtml(t.value)}</div>
@@ -524,23 +649,25 @@ function renderIntelDossier(lead) {
 
   // News headline
   const headline = intel.news?.latest_headline;
-  if (headline) {
-    document.getElementById('callIntelNewsHeadline').textContent = ' ' + headline;
-    newsRow.style.display = 'block';
+  const newsHeadlineEl = document.getElementById('callIntelNewsHeadline');
+  if (headline && newsHeadlineEl) {
+    newsHeadlineEl.textContent = ' ' + headline;
+    if (newsRow) newsRow.style.display = 'block';
   } else {
-    newsRow.style.display = 'none';
+    if (newsRow) newsRow.style.display = 'none';
   }
 
   // Yelp review voice
   const snippets = intel.yelp?.yelp_review_snippets || [];
-  if (snippets.length > 0) {
-    document.getElementById('callIntelYelpSnippet').textContent = ' "' + snippets[0].substring(0, 200) + (snippets[0].length > 200 ? '…' : '') + '"';
-    yelpRow.style.display = 'block';
+  const yelpSnippetEl = document.getElementById('callIntelYelpSnippet');
+  if (snippets.length > 0 && yelpSnippetEl) {
+    yelpSnippetEl.textContent = ' "' + snippets[0].substring(0, 200) + (snippets[0].length > 200 ? '…' : '') + '"';
+    if (yelpRow) yelpRow.style.display = 'block';
   } else {
-    yelpRow.style.display = 'none';
+    if (yelpRow) yelpRow.style.display = 'none';
   }
 
-  section.style.display = 'block';
+  if (section) section.style.display = 'block';
 }
 
 function escapeHtml(str) {
@@ -768,7 +895,8 @@ window.runCallerLiveAudit = async function() {
     if (!data.success) throw new Error(data.error || 'Live audit failed');
 
     window._latestLiveAuditResult = data.lead;
-    openLiveAuditModal(data.lead);
+    window._latestNewFindings = data.new_findings || [];
+    openLiveAuditModal(data.lead, data.new_findings || []);
   } catch (err) {
     showToast(`Live Audit error: ${err.message}`, false);
   } finally {
@@ -779,187 +907,94 @@ window.runCallerLiveAudit = async function() {
   }
 };
 
-window.openLiveAuditModal = function(auditedLead) {
+window.openLiveAuditModal = function(auditedLead, newFindings) {
   if (!auditedLead) return;
 
-  document.getElementById('auditModalTitle').textContent = `⚡ Live Tech & Review Audit: ${auditedLead.name}`;
-  document.getElementById('auditModalSubtitle').textContent = `Real-time scan completed for ${auditedLead.website || auditedLead.name} in ${auditedLead.location || 'Local market'}`;
+  document.getElementById('auditModalTitle').textContent = `⚡ Live Web Tech Audit: ${auditedLead.name}`;
+  document.getElementById('auditModalSubtitle').textContent = `Scan complete for ${auditedLead.website || auditedLead.name}`;
 
-  // 1. Tech Metrics
+  // 1. Tech Metrics panel — website health snapshot
   const techContainer = document.getElementById('auditTechMetrics');
-  const sslBadge = auditedLead.has_ssl 
-    ? '<span style="color: #34d399; font-weight: 700;">✅ Valid SSL Certificate</span>' 
-    : '<span style="color: #f43f5e; font-weight: 700;">🚨 Missing SSL (Plaintext Forms)</span>';
-  
-  const loadTime = auditedLead.load_time_sec ? `${auditedLead.load_time_sec}s` : '2.1s';
-  const speedColor = parseFloat(loadTime) > 3.0 ? '#f43f5e' : '#34d399';
-  const speedBadge = `<span style="color: ${speedColor}; font-weight: 600;">⚡ Page Latency: ${loadTime}</span>`;
+  const ta = auditedLead.tech_audit || {};
 
-  const techStackBadges = (auditedLead.tech_stack || []).map(t => 
-    `<span style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #cbd5e1; font-size: 0.75rem;">${escapeHtml(t)}</span>`
-  ).join(' ') || '<span style="color: #94a3b8;">Standard Web Server</span>';
+  const sslBadge = auditedLead.has_ssl
+    ? '<span style="color:#34d399;font-weight:700;">✅ SSL Valid</span>'
+    : '<span style="color:#f43f5e;font-weight:700;">🚨 No SSL</span>';
 
-  const portalStatus = (auditedLead.features?.noPortal ?? true)
-    ? '<span style="color: #fbbf24;">⚠️ No Customer / Job Portal Detected (Manual Dispatch)</span>'
-    : '<span style="color: #34d399;">✅ Integrated Client Portal Found</span>';
+  const loadSec = auditedLead.load_time_sec ? `${auditedLead.load_time_sec}s` : '—';
+  const loadColor = parseFloat(auditedLead.load_time_sec) > 3 ? '#f43f5e' : '#34d399';
+
+  const ttfb = ta.performance?.ttfb_ms ? `${ta.performance.ttfb_ms}ms TTFB` : '';
+  const lcp  = ta.performance?.lcp_ms  ? `${(ta.performance.lcp_ms/1000).toFixed(1)}s LCP` : '';
+
+  const copyYear = auditedLead.copyright_year || '—';
+  const copyAge  = copyYear !== '—' ? new Date().getFullYear() - parseInt(copyYear) : null;
+  const copyColor = copyAge !== null && copyAge >= 4 ? '#f43f5e' : copyAge !== null && copyAge >= 2 ? '#fbbf24' : '#34d399';
+
+  const stackBadges = (auditedLead.tech_stack || []).slice(0, 6).map(t =>
+    `<span style="background:rgba(255,255,255,0.07);padding:2px 5px;border-radius:3px;color:#cbd5e1;font-size:0.72rem;">${escapeHtml(t)}</span>`
+  ).join(' ') || '<span style="color:#64748b;">Not detected</span>';
+
+  const secScore = ta.dimension_scores?.security ?? null;
+  const secColor = secScore !== null ? (secScore >= 15 ? '#34d399' : secScore >= 8 ? '#fbbf24' : '#f43f5e') : '#94a3b8';
+
+  const grade = ta.grade ? `<span style="font-weight:700;color:#a78bfa;">${ta.grade} (${ta.maturity_score ?? '—'}/100)</span>` : '<span style="color:#64748b;">—</span>';
 
   techContainer.innerHTML = `
-    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-      <span>Security Status:</span>
-      ${sslBadge}
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <span style="color:#94a3b8;">Overall Grade</span>${grade}
     </div>
-    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-      <span>Performance:</span>
-      ${speedBadge}
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <span style="color:#94a3b8;">SSL / HTTPS</span>${sslBadge}
     </div>
-    <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-      <div style="margin-bottom: 3px; color: #94a3b8;">Detected Tech Stack:</div>
-      <div>${techStackBadges}</div>
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <span style="color:#94a3b8;">Load Time</span>
+      <span style="color:${loadColor};font-weight:600;">${loadSec}${ttfb ? ' · ' + ttfb : ''}${lcp ? ' · ' + lcp : ''}</span>
     </div>
-    <div>
-      ${portalStatus}
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <span style="color:#94a3b8;">Security Headers</span>
+      <span style="color:${secColor};font-weight:600;">${secScore !== null ? secScore + '/20' : '—'}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <span style="color:#94a3b8;">Copyright Year</span>
+      <span style="color:${copyColor};font-weight:600;">${copyYear}${copyAge !== null ? ` (${copyAge}yr old)` : ''}</span>
+    </div>
+    <div style="border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
+      <div style="color:#94a3b8;margin-bottom:3px;">Tech Stack</div>
+      <div>${stackBadges}</div>
     </div>
   `;
 
-  // 2. Review Intelligence Breakdown & Executive Summary
-  const reviewContainer = document.getElementById('auditReviewQuotes');
-  const intel = auditedLead.deep_intel || {};
-  const report = auditedLead.review_dossier?.intelligence_report;
-  const allReviewSnippets = [...new Set([...(intel.google_reviews || []), ...(intel.yelp?.yelp_review_snippets || [])])];
-  const topFriction = auditedLead.review_dossier?.top_friction || 'Manual job coordination and spreadsheet tracking';
-
-  let reviewQuotesHtml = '';
-
-  if (report && report.totalReviewsAnalyzed > 0) {
-    const exec = report.executiveSummary;
-    const dist = report.ratingDistribution;
-
-    // Executive Summary Box
-    reviewQuotesHtml += `
-      <div style="background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap;">
-          <span style="font-weight: 800; color: #f87171; font-size: 0.8rem; text-transform: uppercase;">
-            📊 Executive Friction Intelligence (${report.totalReviewsAnalyzed} Reviews Analyzed)
-          </span>
-          <span style="font-size: 0.725rem; color: #cbd5e1; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 4px;">
-            1★: <strong style="color: #f87171;">${dist[1]}</strong> | 2★: <strong style="color: #fbbf24;">${dist[2]}</strong> | 3★: <strong style="color: #38bdf8;">${dist[3]}</strong>
-          </span>
-        </div>
-        <div style="font-size: 0.8rem; color: #f1f5f9; line-height: 1.4; margin-bottom: 4px;">
-          <strong style="color: #fda4af;">🚨 Primary Pain:</strong> ${escapeHtml(exec.primaryPain)} — ${escapeHtml(exec.primaryDetail)}
-        </div>
-        <div style="font-size: 0.775rem; color: #cbd5e1; line-height: 1.4; margin-bottom: 4px;">
-          <strong style="color: #fbbf24;">⏱️ Secondary Bottleneck:</strong> ${escapeHtml(exec.secondaryDetail)}
-        </div>
-        <div style="font-size: 0.75rem; color: #a5b4fc; line-height: 1.4;">
-          <strong style="color: #818cf8;">💡 Opportunity (2–3★ Feedback):</strong> ${escapeHtml(exec.improvementOpportunity)}
-        </div>
-      </div>
-    `;
-
-    // 1★ / 2★ / 3★ Breakdown Matrix Table
-    let tableRows = report.painPoints.map(p => {
-      const sevColor = p.severity === 'high' ? '#f43f5e' : p.severity === 'medium' ? '#fbbf24' : '#34d399';
-      const complaintsHtml = (p.specific_complaints || []).length > 0
-        ? `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <td colspan="6" style="padding: 2px 6px 8px 18px;">
-              <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px;">
-                ${(p.specific_complaints || []).slice(0, 3).map(c =>
-                  `<li style="font-size: 0.72rem; color: #94a3b8; line-height: 1.35;">
-                    <span style="color: #f87171; margin-right: 4px;">›</span>${escapeHtml(c)}
-                  </li>`
-                ).join('')}
-              </ul>
-            </td>
-          </tr>`
-        : '';
+  // 2. New findings checklist
+  const findingsContainer = document.getElementById('auditNewFindings');
+  if (!newFindings || newFindings.length === 0) {
+    findingsContainer.innerHTML = `
+      <div style="color:#64748b;font-style:italic;font-size:0.8rem;padding:8px 0;text-align:center;">
+        No new signals found — live scan matches AI profile.
+      </div>`;
+  } else {
+    const sevColor = { critical:'#f43f5e', high:'#fb923c', medium:'#fbbf24', low:'#94a3b8', info:'#38bdf8' };
+    findingsContainer.innerHTML = newFindings.map((f) => {
+      const col = sevColor[f.severity] || '#94a3b8';
       return `
-        <tr style="border-bottom: ${complaintsHtml ? 'none' : '1px solid rgba(255,255,255,0.05)'}; font-size: 0.75rem;">
-          <td style="padding: 4px 6px; font-weight: 600; color: #e2e8f0;">${escapeHtml(p.pain)}</td>
-          <td style="padding: 4px 6px; text-align: center; color: #f87171; font-weight: 700;">${p.starsBreakdown[1]}</td>
-          <td style="padding: 4px 6px; text-align: center; color: #fbbf24; font-weight: 700;">${p.starsBreakdown[2]}</td>
-          <td style="padding: 4px 6px; text-align: center; color: #38bdf8; font-weight: 700;">${p.starsBreakdown[3]}</td>
-          <td style="padding: 4px 6px; text-align: center; font-weight: 700; color: #f1f5f9;">${p.count} (${p.percentage}%)</td>
-          <td style="padding: 4px 6px; text-align: right;">
-            <span style="background: ${sevColor}22; color: ${sevColor}; border: 1px solid ${sevColor}55; padding: 1px 6px; border-radius: 4px; font-size: 0.675rem; font-weight: 800; text-transform: uppercase;">
-              ${p.severity}
-            </span>
-          </td>
-        </tr>
-        ${complaintsHtml}
-      `;
-    }).join('');
-
-    reviewQuotesHtml += `
-      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-          <thead>
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 0.7rem; text-transform: uppercase;">
-              <th style="padding: 4px 6px;">Friction Category</th>
-              <th style="padding: 4px 6px; text-align: center; color: #f87171;">1★</th>
-              <th style="padding: 4px 6px; text-align: center; color: #fbbf24;">2★</th>
-              <th style="padding: 4px 6px; text-align: center; color: #38bdf8;">3★</th>
-              <th style="padding: 4px 6px; text-align: center;">Total (%)</th>
-              <th style="padding: 4px 6px; text-align: right;">Severity</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
-        </table>
-      </div>
-    `;
-  } else {
-    reviewQuotesHtml += `
-      <div style="background: rgba(244,63,94,0.1); border-left: 3px solid #f43f5e; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; font-weight: 600; color: #fda4af;">
-        🚨 Primary Operational Friction: ${escapeHtml(topFriction)}
-      </div>
-    `;
-  }
-
-  // Verbatim Customer Quotes
-  const cleanCompName = (auditedLead.name || '').toLowerCase().trim();
-  const validSnippets = allReviewSnippets.filter(s => {
-    if (!s || s.length < 20) return false;
-    const lower = s.toLowerCase();
-    if (lower === cleanCompName) return false;
-    // Discard addresses
-    if (s.match(/^(?:\[\d★ - [^\]]+\]:\s*)?["']?\d+\s+[a-z0-9\s,.-]+(?:st|ave|blvd|rd|dr|suite|ste|tx|ca|fl|ny|il|78\d{3}|90\d{3})/i)) return false;
-    // Discard search directory meta snippets
-    if (/\b(?:read\s+\d+\s+(?:customer\s+)?reviews?|read\s+what\s+people|located\s+at\s+\d+|hours,\s+phone\s+number|phone\s+number,\s+directions|one\s+of\s+the\s+best|ratings?,\s+hours|photos,\s+tips|claim\s+this\s+business|unclaimed\s+business|get\s+directions|reviews,\s+ratings)\b/i.test(s)) return false;
-    return true;
-  });
-
-  if (validSnippets.length > 0) {
-    reviewQuotesHtml += `
-      <div style="margin-top: 6px;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">
-          💬 Verbatim Negative Customer Feedback:
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          ${validSnippets.slice(0, 3).map(s => `
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.2); padding: 5px 8px; border-radius: 4px; color: #e2e8f0; font-size: 0.775rem; line-height: 1.4;">
-              ${escapeHtml(s.substring(0, 180))}
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.07);background:rgba(0,0,0,0.25);transition:background 0.15s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'">
+          <input type="checkbox" data-finding-id="${escapeHtml(f.id)}" class="audit-finding-cb" style="margin-top:2px;accent-color:#f59e0b;cursor:pointer;" />
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+              <span style="font-size:0.65rem;font-weight:800;text-transform:uppercase;color:${col};background:${col}18;border:1px solid ${col}44;padding:1px 5px;border-radius:3px;">${escapeHtml(f.severity)}</span>
+              <span style="font-size:0.68rem;color:#64748b;text-transform:uppercase;">${escapeHtml(f.category)}</span>
             </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  } else {
-    reviewQuotesHtml += `
-      <div style="color: #94a3b8; font-style: italic; font-size: 0.8rem; padding: 4px 0;">
-        No severe 1-star public complaints found. Diagnostic model analyzed industry operational friction for ${escapeHtml(auditedLead.industry || 'this sector')}.
-      </div>
-    `;
+            <div style="font-size:0.8rem;color:#e2e8f0;line-height:1.35;">${escapeHtml(f.label)}</div>
+          </div>
+        </label>`;
+    }).join('');
   }
-  reviewContainer.innerHTML = reviewQuotesHtml;
 
-  // 3. Re-synthesized Pitch Hook Preview
+  // 3. Re-synthesized pitch hook preview
   const pitchPreview = document.getElementById('auditPitchPreview');
-  const opener = auditedLead.battlecard?.elevator_opener || 'Hi, calling from Big Binary Tech...';
-  pitchPreview.textContent = opener;
+  pitchPreview.textContent = auditedLead.battlecard?.elevator_opener || 'Hi, calling from Big Binary Tech...';
 
-  // Open Modal
   document.getElementById('liveAuditModal').style.display = 'flex';
 };
 
@@ -967,18 +1002,42 @@ window.closeLiveAuditModal = function() {
   document.getElementById('liveAuditModal').style.display = 'none';
 };
 
-window.applyLiveAuditFindings = function() {
+window.applyLiveAuditFindings = async function() {
   const currentLead = callerLeads[currentIndex];
-  if (!currentLead || !window._latestLiveAuditResult) {
+  if (!currentLead) { closeLiveAuditModal(); return; }
+
+  const checked = [...document.querySelectorAll('.audit-finding-cb:checked')];
+  if (checked.length === 0) {
     closeLiveAuditModal();
+    showToast('No signals selected — nothing applied.');
     return;
   }
 
-  // Update lead in memory with newly crawled signals & fresh pitch
-  Object.assign(currentLead, window._latestLiveAuditResult);
-  renderActiveLead();
-  closeLiveAuditModal();
-  showToast(`✅ Applied live audit findings & updated pitch for "${currentLead.name}"!`);
+  const allFindings = window._latestNewFindings || [];
+  const selectedIds = new Set(checked.map(cb => cb.dataset.findingId));
+  const selectedFindings = allFindings.filter(f => selectedIds.has(f.id));
+
+  const btn = document.querySelector('[onclick="applyLiveAuditFindings()"]');
+  if (btn) { btn.textContent = 'Applying...'; btn.disabled = true; }
+
+  try {
+    const res = await fetch(`/api/leads/${currentLead.id}/apply-findings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_findings: selectedFindings })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Apply failed');
+
+    Object.assign(currentLead, data.lead);
+    renderActiveLead();
+    closeLiveAuditModal();
+    showToast(`Applied ${selectedFindings.length} signal${selectedFindings.length !== 1 ? 's' : ''} to battlecard for "${currentLead.name}"!`);
+  } catch (err) {
+    showToast(`Apply error: ${err.message}`, false);
+  } finally {
+    if (btn) { btn.textContent = 'Apply Selected to Battlecard'; btn.disabled = false; }
+  }
 };
 
 window.pushCallerLeadToClay = async function() {

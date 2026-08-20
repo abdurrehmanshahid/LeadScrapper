@@ -1,5 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns');
+
+// Fix for Windows / ISP DNS servers failing to resolve MongoDB Atlas SRV (_mongodb._tcp) records
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1']);
+} catch (_) {}
 
 // ─── JSON Fallback Storage ─────────────────────────────────────────────────────
 
@@ -19,6 +25,11 @@ function loadJSON(p) {
 
 const GENERIC_DOMAINS = ['odoo.sh', 'odoo.com', 'google.com', 'maps.google.com'];
 const isGenericWeb = (url) => !url || GENERIC_DOMAINS.some(d => url.includes(d));
+
+function extractDomain(url) {
+  try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); }
+  catch { return (url || '').toLowerCase(); }
+}
 
 function makeId() {
   return 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -45,13 +56,14 @@ class Database {
       require('dotenv').config();
     } catch {}
 
-    const uri = process.env.MONGODB_URI;
+    const uri = (process.env.MONGODB_URI || '').trim();
+    const isPlaceholder = !uri || uri.includes('<username>') || uri.includes('<password>') || uri.includes('cluster0.xxxxx.mongodb.net');
 
-    if (!uri) {
+    if (isPlaceholder) {
       this._leads = loadJSON(DB_FILE);
       this._logs  = loadJSON(LOGS_FILE);
-      console.log('ℹ  No MONGODB_URI in .env — using local JSON storage.');
-      console.log('   Add MONGODB_URI=<your Atlas URI> to .env to enable cloud sync.');
+      console.log('ℹ  Local JSON storage active (400+ leads loaded).');
+      console.log('   (To enable MongoDB Atlas cloud sync, set a valid MONGODB_URI in .env)');
       return;
     }
 
@@ -132,6 +144,7 @@ class Database {
       ];
       if (!isGenericWeb(leadData.website)) {
         orClauses.push({ website: leadData.website });
+        orClauses.push({ domain: extractDomain(leadData.website) });
       }
       const doc = await this._Lead.findOneAndUpdate(
         { $or: orClauses },
@@ -141,16 +154,30 @@ class Database {
       return doc;
     }
 
-    // JSON fallback
+    // JSON fallback — match by id, name, or same root domain
+    const incomingDomain = !isGenericWeb(leadData.website) ? extractDomain(leadData.website) : null;
     const idx = this._leads.findIndex(l => {
       if (l.id === leadData.id) return true;
       if (l.name && leadData.name && l.name.trim().toLowerCase() === leadData.name.trim().toLowerCase()) return true;
-      if (l.website && leadData.website && !isGenericWeb(l.website) && !isGenericWeb(leadData.website) && l.website === leadData.website) return true;
+      if (incomingDomain && !isGenericWeb(l.website) && extractDomain(l.website) === incomingDomain) return true;
       return false;
     });
 
     if (idx >= 0) {
-      this._leads[idx] = { ...this._leads[idx], ...leadData, updated_at: new Date().toISOString() };
+      // Non-destructive merge: incoming values only overwrite if the existing slot is empty
+      const existing = this._leads[idx];
+      const merged = { ...existing };
+      for (const [k, v] of Object.entries(leadData)) {
+        const cur = existing[k];
+        const curEmpty = cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0);
+        const newEmpty = v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+        if (curEmpty && !newEmpty) merged[k] = v;   // fill gap
+        else if (!curEmpty && !newEmpty) merged[k] = v; // update with real value
+        // if curEmpty && newEmpty: keep existing (nothing to gain)
+        // if !curEmpty && newEmpty: keep existing (never overwrite enriched with blank)
+      }
+      merged.updated_at = new Date().toISOString();
+      this._leads[idx] = merged;
       this._saveLeads();
       return this._leads[idx];
     }

@@ -83,28 +83,54 @@ app.post('/api/leads/:id/ai-enrich', async (req, res) => {
     const lead = await db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-    const { findDecisionMakers } = require('../auditor/decisionMakerFinder');
-    const { classifyIndustry } = require('../utils/industryClassifier');
+    const { enrichLead } = require('../enricher/geminiEnricher');
     const { launchBrowser } = require('../scraper/browserHelper');
-
-    const domain = lead.website ? lead.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : null;
+    const { scrapeGoogleMapsLowestReviews, scrapeHttpReviewsDataset } = require('../auditor/deepResearcher');
+    const { generateBattlecard } = require('../pitch/battlecardGenerator');
 
     browser = await launchBrowser();
-    const dms = await findDecisionMakers(lead.name, lead.website, domain, browser);
 
-    const mergedDMs = [...(lead.decision_makers || [])];
-    for (const dm of dms) {
-      if (!mergedDMs.some(m => m.name.toLowerCase() === dm.name.toLowerCase())) {
-        mergedDMs.push(dm);
-      }
+    // 1. Scrape real negative reviews — Google Maps lowest-rated first, Yelp fallback
+    console.log(`[AI Enrich] Scraping negative reviews for "${lead.name}"...`);
+    let negativeReviews = [];
+    try {
+      negativeReviews = await scrapeGoogleMapsLowestReviews(lead.name, lead.location || '', browser);
+    } catch (_) {}
+
+    if (negativeReviews.length === 0) {
+      try {
+        const httpReviews = await scrapeHttpReviewsDataset(lead.name, lead.location || '', lead.website || '');
+        negativeReviews = httpReviews.filter(r => r.rating <= 2);
+      } catch (_) {}
     }
 
-    const industry = classifyIndustry(lead.name, lead.notes || '', lead.industry);
-    const patch = { decision_makers: mergedDMs, industry };
+    console.log(`[AI Enrich] Found ${negativeReviews.length} negative reviews for "${lead.name}"`);
 
-    const updated = await db.updateLeadFields(req.params.id, patch);
-    res.json({ success: true, lead: updated });
+    // 2. Run Gemini enrichment with real review context
+    const enrichment = await enrichLead(lead, negativeReviews);
+
+    // 3. Non-destructive merge — never overwrite existing AI data
+    const patch = {};
+    for (const [k, v] of Object.entries(enrichment)) {
+      const cur = lead[k];
+      const curEmpty = cur === null || cur === undefined || cur === ''
+        || (Array.isArray(cur) && cur.length === 0)
+        || (typeof cur === 'object' && !Array.isArray(cur) && Object.keys(cur || {}).length === 0);
+      const newEmpty = v === null || v === undefined || v === ''
+        || (Array.isArray(v) && v.length === 0);
+      if (curEmpty && !newEmpty) patch[k] = v;
+      else if (!curEmpty && !newEmpty) patch[k] = v;
+    }
+
+    patch.battlecard = generateBattlecard({ ...lead, ...patch });
+    patch.last_enriched_at = new Date().toISOString();
+    if (negativeReviews.length > 0) patch.negative_reviews = negativeReviews.slice(0, 15);
+
+    const savedLead = await db.updateLeadFields(lead.id, patch);
+    console.log(`[AI Enrich] Gemini enrichment complete for "${lead.name}" (${negativeReviews.length} reviews used)`);
+    res.json({ success: true, lead: savedLead, reviews_scraped: negativeReviews.length });
   } catch (err) {
+    console.error('[AI Enrich] Error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
     if (browser) try { await browser.close(); } catch (_) {}
@@ -282,7 +308,7 @@ app.post('/api/leads/import-clay-csv', async (req, res) => {
   }
 });
 
-// 4g. Real-Time Live Deep Tech & Negative Review Audit ("Bad Stuff Hunter" & Dynamic Pitch Engine)
+// 4g. Real-Time Live Web Tech Audit (website metrics only — AI enriched data is never overwritten)
 app.post('/api/leads/:id/live-audit', async (req, res) => {
   let browser = null;
   try {
@@ -291,13 +317,11 @@ app.post('/api/leads/:id/live-audit', async (req, res) => {
 
     const { launchBrowser } = require('../scraper/browserHelper');
     const { auditWebsite } = require('../auditor/webHealthAuditor');
-    const { deepResearch } = require('../auditor/deepResearcher');
-    const { generateReviewDossier } = require('../ml/reviewIntelligence');
     const { generateBattlecard } = require('../pitch/battlecardGenerator');
 
     browser = await launchBrowser();
 
-    // 1. Live Web Health & Tech Audit
+    // 1. Live Web Health & Tech Audit only (no review scraping)
     let webAudit = {};
     if (lead.website) {
       try {
@@ -307,64 +331,136 @@ app.post('/api/leads/:id/live-audit', async (req, res) => {
       }
     }
 
-    // 2. Live Deep Yelp / GMB Negative Review & Friction Research ("Bad Stuff Hunter")
-    let deepIntel = {};
-    try {
-      deepIntel = await deepResearch(lead.name, lead.location, lead.website, browser, lead.place_url);
-    } catch (e) {
-      console.warn(`[Live Audit] Deep research warning for ${lead.name}:`, e.message);
+    // 2. Compute new findings — things the live scan discovered that differ from stored data
+    const newFindings = [];
+    const currentYear = new Date().getFullYear();
+
+    if (webAudit.has_ssl !== undefined && webAudit.has_ssl !== lead.has_ssl) {
+      newFindings.push({
+        id: 'ssl_status', category: 'Security',
+        label: webAudit.has_ssl ? 'SSL Certificate confirmed live (profile had it missing)' : 'SSL Missing — site is on plain HTTP (profile assumed secure)',
+        field: 'has_ssl', value: webAudit.has_ssl,
+        severity: webAudit.has_ssl ? 'info' : 'critical'
+      });
     }
 
-    // 3. Merge all fresh live signals into candidate lead
-    const currentYear = new Date().getFullYear();
-    const updatedFeatures = {
-      ...(lead.features || {}),
-      copyrightAge: webAudit.copyright_year ? Math.max(0, currentYear - webAudit.copyright_year) : (lead.features?.copyrightAge || 2),
-      loadTimeSec: webAudit.load_time_sec ? parseFloat(webAudit.load_time_sec) : (lead.features?.loadTimeSec || 2.0),
-      noPortal: webAudit.has_portal !== undefined ? !webAudit.has_portal : (lead.features?.noPortal ?? true),
-      noSSL: webAudit.has_ssl !== undefined ? !webAudit.has_ssl : (lead.features?.noSSL ?? false)
-    };
+    if (webAudit.load_time_sec && Math.abs(webAudit.load_time_sec - (lead.load_time_sec || 1.8)) > 0.5) {
+      newFindings.push({
+        id: 'load_time', category: 'Performance',
+        label: `Live page load: ${webAudit.load_time_sec}s (profile had ${lead.load_time_sec || 1.8}s)`,
+        field: 'load_time_sec', value: webAudit.load_time_sec,
+        severity: webAudit.load_time_sec > 3 ? 'high' : 'medium'
+      });
+    }
 
-    const mergedTechStack = [...(webAudit.tech_stack || lead.tech_stack || [])];
-    if (mergedTechStack.length === 0) mergedTechStack.push('Odoo ERP');
+    if (webAudit.copyright_year && String(webAudit.copyright_year) !== String(lead.copyright_year)) {
+      const age = currentYear - parseInt(webAudit.copyright_year);
+      newFindings.push({
+        id: 'copyright_year', category: 'Modernity',
+        label: `Copyright year ${webAudit.copyright_year} found live (profile had ${lead.copyright_year || 'unknown'}) — site is ${age} year${age !== 1 ? 's' : ''} outdated`,
+        field: 'copyright_year', value: webAudit.copyright_year,
+        severity: age >= 4 ? 'high' : 'low'
+      });
+    }
 
-    const updatedLeadCandidate = {
-      ...lead,
-      has_ssl: webAudit.has_ssl !== undefined ? webAudit.has_ssl : lead.has_ssl,
-      load_time_sec: webAudit.load_time_sec || lead.load_time_sec,
+    const existingStack = new Set((lead.tech_stack || []).map(t => t.toLowerCase()));
+    (webAudit.tech_stack || []).filter(t => !existingStack.has(t.toLowerCase())).forEach(tech => {
+      newFindings.push({
+        id: `tech_${tech.toLowerCase().replace(/\W+/g, '_')}`, category: 'Tech Stack',
+        label: `Detected: ${tech} (not in AI profile)`,
+        field: 'tech_stack_item', value: tech,
+        severity: 'info'
+      });
+    });
+
+    (webAudit.tech_audit?.issues || [])
+      .filter(i => i.severity === 'critical' || i.severity === 'high')
+      .forEach((issue, idx) => {
+        newFindings.push({
+          id: `issue_${idx}`, category: issue.category || 'Technical Issue',
+          label: issue.issue + (issue.evidence ? ` — ${issue.evidence}` : ''),
+          field: null, value: null,
+          severity: issue.severity
+        });
+      });
+
+    // 3. Patch only web-specific fields — never touch AI enriched data
+    const currentFeatures = lead.features || {};
+    const webPatch = {
+      has_ssl:        webAudit.has_ssl !== undefined ? webAudit.has_ssl : lead.has_ssl,
+      load_time_sec:  webAudit.load_time_sec || lead.load_time_sec,
       copyright_year: webAudit.copyright_year || lead.copyright_year,
-      tech_stack: mergedTechStack,
-      deep_intel: deepIntel,
-      features: updatedFeatures
-    };
-
-    // 4. Extract Customer Voice & Negative Review Complaints
-    const reviewDossier = generateReviewDossier(updatedLeadCandidate);
-    updatedLeadCandidate.review_dossier = reviewDossier;
-
-    // 5. Dynamic Battlecard Re-Generation referencing the fresh live audit data
-    const freshBattlecard = generateBattlecard(updatedLeadCandidate);
-
-    const patch = {
-      has_ssl: updatedLeadCandidate.has_ssl,
-      load_time_sec: updatedLeadCandidate.load_time_sec,
-      copyright_year: updatedLeadCandidate.copyright_year,
-      tech_stack: updatedLeadCandidate.tech_stack,
-      deep_intel: updatedLeadCandidate.deep_intel,
-      review_dossier: updatedLeadCandidate.review_dossier,
-      features: updatedLeadCandidate.features,
-      battlecard: freshBattlecard,
+      tech_audit:     webAudit.tech_audit || null,
+      features: {
+        ...currentFeatures,
+        copyrightAge: webAudit.copyright_year ? Math.max(0, currentYear - webAudit.copyright_year) : (currentFeatures.copyrightAge || 2),
+        loadTimeSec:  webAudit.load_time_sec  ? parseFloat(webAudit.load_time_sec)                  : (currentFeatures.loadTimeSec  || 2.0),
+        noSSL:        webAudit.has_ssl !== undefined ? !webAudit.has_ssl : (currentFeatures.noSSL ?? false),
+        noPortal:     webAudit.has_portal !== undefined ? !webAudit.has_portal : (currentFeatures.noPortal ?? true)
+      },
       last_audited_at: new Date().toISOString()
     };
 
-    const savedLead = await db.updateLeadFields(lead.id, patch);
-    console.log(`[Live Audit] Successfully completed real-time tech & review audit for "${lead.name}"!`);
-    res.json({ success: true, lead: savedLead, message: 'Live Tech & Review Audit complete! Pitch re-synthesized.' });
+    // Append newly detected tech to the existing AI-enriched stack (never replace)
+    const newTech = (webAudit.tech_stack || []).filter(t => !existingStack.has(t.toLowerCase()));
+    if (newTech.length > 0) {
+      webPatch.tech_stack = [...(lead.tech_stack || []), ...newTech];
+    }
+
+    // 4. Regenerate battlecard using AI data + fresh web signals (read-only merge for battlecard input)
+    const battlecardInput = { ...lead, ...webPatch };
+    webPatch.battlecard = generateBattlecard(battlecardInput);
+
+    const savedLead = await db.updateLeadFields(lead.id, webPatch);
+    console.log(`[Live Audit] Web tech audit complete for "${lead.name}" — ${newFindings.length} new signals found.`);
+    res.json({
+      success: true,
+      lead: savedLead,
+      new_findings: newFindings,
+      web_audit: webAudit.tech_audit || {},
+      message: `Live Web Audit complete. ${newFindings.length} new signal${newFindings.length !== 1 ? 's' : ''} found.`
+    });
   } catch (err) {
     console.error('Error during live audit:', err);
     res.status(500).json({ error: err.message });
   } finally {
     if (browser) try { await browser.close(); } catch (_) {}
+  }
+});
+
+// 4h. Apply user-selected findings from live audit into lead fields & battlecard
+app.post('/api/leads/:id/apply-findings', async (req, res) => {
+  const { selected_findings } = req.body;
+  if (!Array.isArray(selected_findings) || selected_findings.length === 0) {
+    return res.status(400).json({ error: 'No findings selected' });
+  }
+  try {
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { generateBattlecard } = require('../pitch/battlecardGenerator');
+    const patch = {};
+    const newTechItems = [];
+
+    for (const f of selected_findings) {
+      if (f.field === 'has_ssl')          patch.has_ssl = f.value;
+      else if (f.field === 'load_time_sec')   patch.load_time_sec = f.value;
+      else if (f.field === 'copyright_year')  patch.copyright_year = f.value;
+      else if (f.field === 'tech_stack_item') newTechItems.push(f.value);
+      // field === null → informational issue, no field to patch
+    }
+
+    if (newTechItems.length > 0) {
+      patch.tech_stack = [...new Set([...(lead.tech_stack || []), ...newTechItems])];
+    }
+
+    // Regenerate battlecard incorporating the accepted findings — AI fields remain untouched
+    patch.battlecard = generateBattlecard({ ...lead, ...patch });
+
+    const savedLead = await db.updateLeadFields(lead.id, patch);
+    res.json({ success: true, lead: savedLead });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -467,7 +563,97 @@ app.get('/api/export/csv', async (_req, res) => {
   }
 });
 
-// 11. Sync & Ingest Enriched AI Leads from JSON
+// 11. AI Enrich a single lead via Gemini (never overwrites existing enriched fields)
+// 12b. Import Clay CSV — match by domain, update decision_makers
+app.post('/api/leads/import-clay-csv', (req, res) => {
+  const multer = require('multer');
+  const { parse } = require('csv-parse');
+  const upload = multer({ storage: multer.memoryStorage() });
+
+  upload.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: 'File upload error' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    let rows = [];
+    try {
+      rows = await new Promise((resolve, reject) => {
+        parse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true }, (e, records) => {
+          if (e) reject(e); else resolve(records);
+        });
+      });
+    } catch (e) {
+      return res.status(400).json({ error: `CSV parse error: ${e.message}` });
+    }
+
+    // Normalise column names — Clay exports vary (First Name / first_name / firstName)
+    function col(row, ...keys) {
+      for (const k of keys) {
+        const found = Object.keys(row).find(r => r.toLowerCase().replace(/[\s_-]/g, '') === k.toLowerCase().replace(/[\s_-]/g, ''));
+        if (found && row[found]?.trim()) return row[found].trim();
+      }
+      return '';
+    }
+
+    function extractDomain(url) {
+      try { return new URL(url.startsWith('http') ? url : 'https://' + url).hostname.replace(/^www\./, ''); } catch { return ''; }
+    }
+
+    const allLeads = await db.getAllLeads();
+    let matched = 0, skipped = 0;
+
+    for (const row of rows) {
+      const firstName  = col(row, 'firstname', 'first name', 'first_name');
+      const lastName   = col(row, 'lastname', 'last name', 'last_name');
+      const fullName   = col(row, 'fullname', 'full name', 'name', 'contact name') || `${firstName} ${lastName}`.trim();
+      const title      = col(row, 'title', 'jobtitle', 'job title', 'position', 'role');
+      const email      = col(row, 'email', 'work email', 'workemail', 'email address');
+      const linkedin   = col(row, 'linkedin', 'linkedinurl', 'linkedin url', 'linkedin_url');
+      const phone      = col(row, 'phone', 'direct phone', 'mobile', 'phonenumber');
+      const compDomain = col(row, 'website', 'company domain', 'companydomain', 'domain', 'company website');
+      const compName   = col(row, 'company', 'company name', 'companyname', 'organization');
+
+      if (!fullName) { skipped++; continue; }
+
+      // Match lead by domain first, then by company name fuzzy
+      const domain = extractDomain(compDomain);
+      let lead = domain
+        ? allLeads.find(l => extractDomain(l.website || '') === domain)
+        : null;
+      if (!lead && compName) {
+        const cn = compName.toLowerCase();
+        lead = allLeads.find(l => (l.name || '').toLowerCase().includes(cn) || cn.includes((l.name || '').toLowerCase().split(' ')[0]));
+      }
+
+      if (!lead) { skipped++; continue; }
+
+      const contact = {
+        name: fullName,
+        title: title || 'Decision Maker',
+        email_guess: email || null,
+        linkedin_url: linkedin || null,
+        phone: phone || null,
+        source: 'clay_csv',
+        verified: true
+      };
+
+      // Deduplicate by name
+      const existing = lead.decision_makers || [];
+      const alreadyExists = existing.some(dm => dm.name.toLowerCase() === fullName.toLowerCase());
+      if (alreadyExists) { skipped++; continue; }
+
+      // Remove AI-guessed contacts for same lead if we now have real data
+      const prunedDMs = existing.filter(dm => dm.source !== 'gemini_ai_enrichment');
+      const updatedDMs = [...prunedDMs, contact];
+
+      await db.updateLeadFields(lead.id, { decision_makers: updatedDMs });
+      matched++;
+    }
+
+    res.json({ success: true, matched, skipped, total: rows.length, message: `Matched ${matched} contacts to leads (${skipped} skipped — no match or duplicate)` });
+  });
+});
+
+// 12. Sync & Ingest Enriched AI Leads from JSON
 app.post('/api/leads/sync-enriched', async (_req, res) => {
   try {
     const { importEnrichedLeads } = require('../storage/importEnrichedLeads');
@@ -502,10 +688,13 @@ async function start() {
   try {
     await db.connect();
     const existing = await db.getAllLeads();
-    if (existing.length < 300) {
-      console.log(`[Auto-Sync] Database has ${existing.length} leads. Syncing 399 enriched leads...`);
+    const enrichedCount = existing.filter(l => l.odoo_playbook).length;
+    if (enrichedCount < 399) {
+      console.log(`[Auto-Sync] AI-enriched leads need syncing (${enrichedCount}/399 present). Importing from enriched_odoo_leads.json...`);
       const { importEnrichedLeads } = require('../storage/importEnrichedLeads');
       await importEnrichedLeads();
+    } else {
+      console.log(`[Auto-Sync] All ${enrichedCount} AI-enriched leads verified and ready (${existing.length} total leads in database).`);
     }
   } catch (err) {
     console.warn('Database initialization warning:', err.message);
