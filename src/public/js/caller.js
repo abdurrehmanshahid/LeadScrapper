@@ -54,6 +54,24 @@ function primaryPhone(lead) {
   return p.length ? p[0].number : '';
 }
 
+// Fetch with one automatic retry on a network error or 5xx (transient Atlas resets),
+// so a momentary blip doesn't drop the user's save.
+async function fetchWithRetry(url, opts, tries = 2) {
+  let lastErr;
+  for (let i = 1; i <= tries; i++) {
+    try {
+      const res = await fetch(url, opts);
+      if (res.status >= 500 && i < tries) { await new Promise(r => setTimeout(r, 400 * i)); continue; }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (i === tries) throw e;
+      await new Promise(r => setTimeout(r, 400 * i));
+    }
+  }
+  throw lastErr;
+}
+
 function contactLine(label, valueHtml) {
   return `<div class="contact-line"><span class="contact-key">${label}</span>` +
          `<span class="contact-val">${valueHtml || '—'}</span></div>`;
@@ -1097,7 +1115,7 @@ async function saveEditedLead(e) {
   const saveBtn = document.getElementById('editSaveBtn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
   try {
-    const res = await fetch(`/api/leads/${lead.id || lead._id}`, {
+    const res = await fetchWithRetry(`/api/leads/${lead.id || lead._id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

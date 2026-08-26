@@ -12,10 +12,12 @@ try {
 const DATA_DIR = path.join(__dirname, '../../data');
 const DB_FILE  = path.join(DATA_DIR, 'leads_db.json');
 const LOGS_FILE = path.join(DATA_DIR, 'call_logs.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(DB_FILE))  fs.writeFileSync(DB_FILE,  '[]', 'utf-8');
 if (!fs.existsSync(LOGS_FILE)) fs.writeFileSync(LOGS_FILE, '[]', 'utf-8');
+if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, '[]', 'utf-8');
 
 function loadJSON(p) {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8') || '[]'); } catch { return []; }
@@ -46,8 +48,10 @@ class Database {
     this._mongo = false;   // true when connected to Atlas
     this._Lead = null;
     this._CallLog = null;
+    this._User = null;
     this._leads = [];      // in-memory JSON store
     this._logs = [];
+    this._users = [];      // in-memory JSON store for auth users
   }
 
   // Called once at server startup — decides which backend to use
@@ -62,6 +66,7 @@ class Database {
     if (isPlaceholder) {
       this._leads = loadJSON(DB_FILE);
       this._logs  = loadJSON(LOGS_FILE);
+      this._users = loadJSON(USERS_FILE);
       console.log('ℹ  Local JSON storage active (400+ leads loaded).');
       console.log('   (To enable MongoDB Atlas cloud sync, set a valid MONGODB_URI in .env)');
       return;
@@ -73,6 +78,7 @@ class Database {
       const anySchema = new mongoose.Schema({}, { strict: false, timestamps: true });
       this._Lead    = mongoose.models.Lead    || mongoose.model('Lead',    anySchema);
       this._CallLog = mongoose.models.CallLog || mongoose.model('CallLog', new mongoose.Schema({}, { strict: false, timestamps: true }));
+      this._User    = mongoose.models.User    || mongoose.model('User',    new mongoose.Schema({}, { strict: false, timestamps: true }));
 
       mongoose.connection.on('disconnected', () => {
         console.warn('⚠  MongoDB Atlas disconnected. Attempting auto-reconnection...');
@@ -97,6 +103,7 @@ class Database {
       console.warn('   Falling back to local JSON storage.');
       this._leads = loadJSON(DB_FILE);
       this._logs  = loadJSON(LOGS_FILE);
+      this._users = loadJSON(USERS_FILE);
     }
   }
 
@@ -197,12 +204,11 @@ class Database {
     patch.manually_enriched = true;
 
     if (this._mongo) {
-      const doc = await this._Lead.findOneAndUpdate(
-        { id },
-        { $set: patch },
-        { new: true }
-      ).lean();
-      return doc;
+      // Retry transient Atlas resets (ECONNRESET / network blips) so a momentary
+      // hiccup doesn't surface as "NOT saved" and lose the user's edits.
+      return await this._withRetry(() =>
+        this._Lead.findOneAndUpdate({ id }, { $set: patch }, { new: true }).lean()
+      );
     }
 
     const idx = this._leads.findIndex(l => l.id === id);
@@ -333,10 +339,110 @@ class Database {
     return [headers.join(','), ...rows].join('\n');
   }
 
+  // ─── Users (authentication) ──────────────────────────────────────────────────
+
+  async getUserByEmail(email) {
+    const e = String(email || '').trim().toLowerCase();
+    if (!e) return null;
+    if (this._mongo) {
+      try { return await this._User.findOne({ email: e }).lean(); }
+      catch { return (loadJSON(USERS_FILE)).find(u => u.email === e) || null; }
+    }
+    return this._users.find(u => u.email === e) || null;
+  }
+
+  async getUserById(id) {
+    if (this._mongo) {
+      try { return await this._User.findOne({ id }).lean(); }
+      catch { return (loadJSON(USERS_FILE)).find(u => u.id === id) || null; }
+    }
+    return this._users.find(u => u.id === id) || null;
+  }
+
+  async getAllUsers() {
+    if (this._mongo) {
+      try { return await this._User.find({}).sort({ createdAt: 1 }).lean(); }
+      catch { return loadJSON(USERS_FILE); }
+    }
+    return this._users;
+  }
+
+  async createUser(user) {
+    const doc = {
+      id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      email: String(user.email || '').trim().toLowerCase(),
+      password_hash: user.password_hash,
+      name: user.name || '',
+      role: user.role || 'sdr_user',
+      team: user.team || 'b2b',
+      active: user.active !== false,
+      created_at: new Date().toISOString()
+    };
+    if (this._mongo) {
+      // Use $set upsert (not create) so the literal `id` field is written — a
+      // plain create() collides with Mongoose's built-in id→_id virtual.
+      return await this._User.findOneAndUpdate(
+        { id: doc.id }, { $set: doc }, { upsert: true, new: true, setDefaultsOnInsert: true }
+      ).lean();
+    }
+    this._users.push(doc);
+    this._saveUsers();
+    return doc;
+  }
+
+  async updateUser(id, fields) {
+    const patch = {};
+    for (const k of Object.keys(fields)) { if (k !== 'id' && k !== '_id') patch[k] = fields[k]; }
+    if (this._mongo) {
+      return await this._User.findOneAndUpdate({ id }, { $set: patch }, { new: true }).lean();
+    }
+    const idx = this._users.findIndex(u => u.id === id);
+    if (idx < 0) return null;
+    this._users[idx] = { ...this._users[idx], ...patch };
+    this._saveUsers();
+    return this._users[idx];
+  }
+
+  async deleteUser(id) {
+    if (this._mongo) {
+      const r = await this._User.deleteOne({ id });
+      return r.deletedCount > 0;
+    }
+    const before = this._users.length;
+    this._users = this._users.filter(u => u.id !== id);
+    if (this._users.length !== before) { this._saveUsers(); return true; }
+    return false;
+  }
+
+  async countUsers() {
+    if (this._mongo) { try { return await this._User.countDocuments({}); } catch { return loadJSON(USERS_FILE).length; } }
+    return this._users.length;
+  }
+
   // ─── Private ─────────────────────────────────────────────────────────────────
+
+  // Retry a Mongo operation on transient network/connection errors (Atlas on
+  // flaky Windows/ISP links resets sockets — retryWrites alone doesn't cover all).
+  async _withRetry(fn, tries = 3) {
+    let lastErr;
+    for (let attempt = 1; attempt <= tries; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastErr = err;
+        const msg = `${err && err.name} ${err && err.message}`.toLowerCase();
+        const transient = /econnreset|etimedout|enotfound|socket|network|pool.*(clear|destroy)|topology|server selection|timed out/.test(msg);
+        if (!transient || attempt === tries) break;
+        await new Promise(r => setTimeout(r, 300 * attempt)); // 300ms, 600ms backoff
+        console.warn(`[DB] transient error, retry ${attempt}/${tries - 1}: ${err.message}`);
+      }
+    }
+    throw lastErr;
+  }
 
   _saveLeads() { fs.writeFileSync(DB_FILE, JSON.stringify(this._leads, null, 2), 'utf-8'); }
   _saveLogs()  { fs.writeFileSync(LOGS_FILE, JSON.stringify(this._logs, null, 2), 'utf-8'); }
+  _saveUsers() { fs.writeFileSync(USERS_FILE, JSON.stringify(this._users, null, 2), 'utf-8'); }
 }
 
 module.exports = new Database();

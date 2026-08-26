@@ -19,3 +19,19 @@ Thumbs.db
 # Claude Code manual-enrichment scratch files
 data/_enrich_work.json
 data/_enrich_analyses.json
+
+# Runtime data mirrors — MongoDB Atlas is the source of truth, these are just
+# local caches that every machine rewrites (so they caused git-pull conflicts).
+# Fresh/offline machines still seed from the tracked enriched_odoo_leads.json.
+data/leads_db.json
+data/leads_db.backup.json
+data/call_logs.json
+
+# User accounts / password hashes — must never leave the machine
+data/users.json
+
+# graphify code-graph output — generated locally (rebuild: graphify update .)
+graphify-out/
+
+# Local Claude Code hooks (machine-specific graphify paths)
+.claude/settings.json

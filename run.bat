@@ -23,7 +23,12 @@ if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "PATH=%LOCALAPPDATA%\Prog
 where git >nul 2>nul
 if %errorlevel% equ 0 (
     if exist ".git\" (
-        echo [*] Auto-Sync: Pulling latest leads and code from GitHub...
+        echo [*] Auto-Sync: Pulling latest code from GitHub...
+        :: Safety net: back up local data before touching it, so nothing is ever lost.
+        if exist "data\leads_db.json" copy /Y "data\leads_db.json" "data\leads_db.backup.json" >nul 2>nul
+        :: Runtime data mirrors are local-only (Atlas is the source of truth). Discard any
+        :: local changes to them so the pull never conflicts on machine-specific data.
+        git checkout -- data/leads_db.json data/call_logs.json >nul 2>nul
         git pull origin master
         if errorlevel 1 (
             git pull origin main
@@ -76,22 +81,31 @@ if not exist ".env" (
     )
 )
 
-:: 7. Auto-tunnel via ngrok so Clay can POST enrichment callbacks back in real-time
+:: 7. Auto-tunnel via ngrok so Clay can POST enrichment callbacks back in real-time.
+::    Uses your RESERVED domain so Clay's URL is identical on every launch, and
+::    auto-registers the authtoken from .env (ngrok_auth_token=...).
+set "NGROK_DOMAIN=triage-garbage-sultry.ngrok-free.dev"
 where ngrok >nul 2>nul
 if %errorlevel% equ 0 (
-    echo [*] ngrok detected — starting public tunnel for Clay callbacks...
-    start "" /B ngrok http 3000 >nul 2>nul
+    :: Pull the authtoken out of .env and register it (harmless if already set)
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"ngrok_auth_token=" ".env"`) do set "NGROK_TOKEN=%%B"
+    if defined NGROK_TOKEN (
+        ngrok config add-authtoken %NGROK_TOKEN% >nul 2>nul
+    )
+    echo [*] ngrok detected — starting public tunnel on %NGROK_DOMAIN% ...
+    start "" /B ngrok http 3000 --url https://%NGROK_DOMAIN% >nul 2>nul
     :: Give ngrok 4 seconds to establish the tunnel
     timeout /t 4 /nobreak >nul
-    :: Query ngrok local API for the HTTPS public URL
+    :: Query ngrok local API for the HTTPS public URL (verification)
     for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "(Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction SilentlyContinue).tunnels | Where-Object { $_.proto -eq 'https' } | Select-Object -First 1 -ExpandProperty public_url"`) do set "NGROK_URL=%%U"
     if defined NGROK_URL (
         set "APP_URL=%NGROK_URL%"
-        echo [*] Clay callback URL set: %NGROK_URL%
+        echo [*] Clay callback URL live: %NGROK_URL%/api/leads/sync
         echo [*] Clay will auto-update leads in real-time via this public URL.
     ) else (
-        echo [i] ngrok tunnel not ready — Clay callbacks will fall back to localhost.
-        echo [i] Make sure you have run: ngrok config add-authtoken YOUR_TOKEN
+        set "APP_URL=https://%NGROK_DOMAIN%"
+        echo [i] ngrok tunnel not confirmed on :4040 — defaulting APP_URL to https://%NGROK_DOMAIN%
+        echo [i] If Clay callbacks fail, check your authtoken in .env (ngrok_auth_token=...).
     )
 ) else (
     echo [i] ngrok not found — Clay real-time auto-update disabled.

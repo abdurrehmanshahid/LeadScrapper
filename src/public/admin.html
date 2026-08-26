@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Big Binary Tech - Team & Access</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <header class="navbar">
+    <div class="brand">
+      <img src="images/logo.png" alt="Big Binary Tech" class="brand-badge-icon">
+      <div class="brand-text">
+        <h1>BIG BINARY <span class="tech-tag">TECH</span></h1>
+        <span class="sub-title">Team &amp; Access Management</span>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <a href="index.html" class="btn btn-secondary btn-sm">Return to Dashboard</a>
+    </div>
+  </header>
+
+  <main style="max-width: 1100px; margin: 1.5rem auto; padding: 0 1.25rem;">
+    <section class="admin-panel">
+      <div class="sdr-card-title" style="margin-bottom: 1rem;">
+        <span>Add Team Member</span>
+      </div>
+      <form id="addUserForm" onsubmit="addUser(event)" class="admin-add-grid">
+        <input type="text" id="nuName" class="form-control" placeholder="Full name" required>
+        <input type="email" id="nuEmail" class="form-control" placeholder="Work email" required>
+        <input type="password" id="nuPassword" class="form-control" placeholder="Temp password" required>
+        <select id="nuRole" class="form-control">
+          <option value="sdr_user">SDR / User</option>
+          <option value="junior_enricher">Junior Enricher</option>
+          <option value="super_admin">Super Admin</option>
+        </select>
+        <select id="nuTeam" class="form-control">
+          <option value="b2b">B2B</option>
+          <option value="b2c">B2C</option>
+        </select>
+        <button type="submit" id="addUserBtn" class="btn btn-primary">Add</button>
+      </form>
+      <div id="addUserMsg" class="admin-msg" style="display:none;"></div>
+    </section>
+
+    <section class="admin-panel" style="margin-top: 1.25rem;">
+      <div class="sdr-card-title" style="margin-bottom: 1rem;">
+        <span>Team Members</span>
+        <span style="font-size: 0.7rem; color: #94a3b8;">Roles gate who can spend Clay / Apollo credits</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="admin-table" id="usersTable">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="usersBody"><tr><td colspan="6" style="color:#94a3b8;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/authClient.js"></script>
+  <script>
+    const ROLES = [['sdr_user', 'SDR / User'], ['junior_enricher', 'Junior Enricher'], ['super_admin', 'Super Admin']];
+    const TEAMS = [['b2b', 'B2B'], ['b2c', 'B2C']];
+    const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // Only super admins belong here.
+    function guard() {
+      const u = window.currentUser;
+      if (u && u.role !== 'super_admin') { location.href = 'index.html'; return false; }
+      return true;
+    }
+
+    async function loadUsers() {
+      const res = await fetch('/api/users');
+      if (!res.ok) { document.getElementById('usersBody').innerHTML = '<tr><td colspan="6" style="color:#fb7185;">Not authorized.</td></tr>'; return; }
+      const { users } = await res.json();
+      const me = window.currentUser || {};
+      document.getElementById('usersBody').innerHTML = users.map(u => `
+        <tr>
+          <td>${esc(u.name || '—')}</td>
+          <td>${esc(u.email)}</td>
+          <td>
+            <select class="form-control form-control-sm" onchange="patchUser('${u.id}', 'role', this.value)">
+              ${ROLES.map(([v, l]) => `<option value="${v}" ${u.role === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
+          <td>
+            <select class="form-control form-control-sm" onchange="patchUser('${u.id}', 'team', this.value)">
+              ${TEAMS.map(([v, l]) => `<option value="${v}" ${u.team === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="patchUser('${u.id}', 'active', ${u.active === false})">
+              ${u.active === false ? 'Disabled' : 'Active'}
+            </button>
+          </td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-secondary btn-sm" onclick="resetPw('${u.id}')">Reset PW</button>
+            ${u.id === me.id ? '' : `<button class="btn btn-secondary btn-sm" style="color:#fb7185;border-color:rgba(251,113,133,0.4);" onclick="delUser('${u.id}','${esc(u.email)}')">Delete</button>`}
+          </td>
+        </tr>`).join('');
+    }
+
+    async function addUser(e) {
+      e.preventDefault();
+      const btn = document.getElementById('addUserBtn');
+      const msg = document.getElementById('addUserMsg');
+      msg.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Adding…';
+      try {
+        const res = await fetch('/api/users', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('nuName').value.trim(),
+            email: document.getElementById('nuEmail').value.trim(),
+            password: document.getElementById('nuPassword').value,
+            role: document.getElementById('nuRole').value,
+            team: document.getElementById('nuTeam').value
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Failed to add user');
+        document.getElementById('addUserForm').reset();
+        msg.textContent = 'User added.'; msg.className = 'admin-msg admin-msg-ok'; msg.style.display = 'block';
+        loadUsers();
+      } catch (err) {
+        msg.textContent = err.message; msg.className = 'admin-msg admin-msg-err'; msg.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Add';
+      }
+    }
+
+    async function patchUser(id, field, value) {
+      try {
+        const res = await fetch('/api/users/' + id, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: value })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Update failed');
+      } catch (err) { alert(err.message); }
+      loadUsers();
+    }
+
+    async function resetPw(id) {
+      const pw = prompt('New password for this user:');
+      if (!pw) return;
+      await patchUser(id, 'password', pw);
+      alert('Password updated.');
+    }
+
+    async function delUser(id, email) {
+      if (!confirm('Delete ' + email + '? This cannot be undone.')) return;
+      const res = await fetch('/api/users/' + id, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(data.error || 'Delete failed'); return; }
+      loadUsers();
+    }
+
+    // Wait for authClient to resolve the current user, then guard + load.
+    (function waitForUser(n) {
+      if (window.currentUser) { if (guard()) loadUsers(); return; }
+      if (n > 40) return;
+      setTimeout(() => waitForUser(n + 1), 100);
+    })(0);
+  </script>
+</body>
+
+</html>

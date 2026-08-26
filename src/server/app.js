@@ -1,3 +1,4 @@
+try { require('dotenv').config(); } catch (_) {} // load .env before any setup (session secret, keys)
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -11,7 +12,36 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// ── Authentication: sessions, login/logout, user management, role middleware ──
+const { installAuth, seedSuperAdmin, requireAuth, requireRole, ENRICHERS } = require('./auth');
+installAuth(app, db);
+
+// Gate the app HTML pages: unauthenticated navigations are sent to the login screen.
+app.use((req, res, next) => {
+  const p = req.path;
+  const isAppPage = p === '/' || p === '/index.html' || p === '/caller.html' || p === '/admin.html';
+  if (isAppPage && !req.user) return res.redirect('/login.html');
+  next();
+});
+
+// Static assets (login page, css, js, images) — served after the page gate.
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Require a logged-in user for all API calls except auth routes + the x-api-key Clay sync.
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/leads/sync' || req.path === '/webhooks/clay') return next();
+  return requireAuth(req, res, next);
+});
+
+// Credit-spending enrichment is restricted to super_admin + junior_enricher.
+const ENRICH_PATHS = [/clay-push$/, /clay-batch-push/, /warm-enrich/, /live-audit/, /grounded-analysis/, /ai-enrich/, /pre-enrich/, /^\/scrape\//, /import-clay-csv/];
+app.use('/api', (req, res, next) => {
+  if (ENRICH_PATHS.some(rx => rx.test(req.path)) && (!req.user || !ENRICHERS.includes(req.user.role))) {
+    return res.status(403).json({ error: 'Enrichment is limited to admins and enrichers.' });
+  }
+  next();
+});
 
 // In-memory progress tracker for live scraping terminal
 let currentScrapeJob = { is_running: false, type: null, logs: [] };
@@ -962,6 +992,7 @@ async function start() {
   // Connect to Database (Atlas or local fallback)
   try {
     await db.connect();
+    await seedSuperAdmin(db); // creates the first super admin if no users exist
     const existing = await db.getAllLeads();
     const enrichedCount = existing.filter(l => l.odoo_playbook).length;
     if (enrichedCount < 399) {
