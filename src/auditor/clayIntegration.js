@@ -52,50 +52,60 @@ async function pushLeadToClay(lead, webhookUrl) {
  */
 function processClayEnrichmentPayload(body) {
   const patch = {};
+  const first = (...vals) => vals.find(v => v != null && String(v).trim() !== '');
+  const str = (v) => (v == null ? '' : String(v).trim());
 
-  // Extract direct / mobile phone
-  const phone = body.mobile_phone || body.direct_phone || body.cell_phone || body.phone;
-  if (phone && phone.trim()) {
-    patch.phone = phone.trim();
-  }
+  // ── Company-level phone / email (accepts common provider field names) ──────
+  const phone = first(body.company_phone, body.mobile_phone, body.direct_phone, body.cell_phone,
+    body.phone_number, body.phone, body.mobile);
+  if (phone) patch.phone = str(phone);
 
-  // Extract verified corporate / personal email
-  const email = body.verified_email || body.work_email || body.email;
-  if (email && email.trim() && !email.includes('operations@') && !email.includes('contact@')) {
-    patch.email = email.trim();
-  }
+  const email = first(body.company_email, body.verified_email, body.work_email, body.email, body.personal_email);
+  if (email && !/^(operations@|contact@)/i.test(str(email))) patch.email = str(email);
 
-  // Extract website
-  if (body.website && body.website.trim()) {
-    patch.website = body.website.trim();
-  }
+  // ── Company profile fields (People Data Labs / RocketReach company enrich) ──
+  const website = first(body.website, body.company_website, body.domain);
+  if (website) patch.website = /^https?:\/\//i.test(str(website)) ? str(website) : 'https://' + str(website);
 
-  // Extract physical address
-  if (body.address && body.address.trim()) {
-    patch.address = body.address.trim();
-  }
+  const address = first(body.address, body.location, body.company_location, body.hq_location);
+  if (address) patch.address = str(address);
 
-  // Extract or enrich decision makers
-  const dmName = body.decision_maker_name || body.full_name || body.ceo_name || body.name;
-  const dmTitle = body.decision_maker_title || body.job_title || body.title || 'Founder / CEO';
-  const dmEmail = body.verified_email || body.decision_maker_email || body.email;
-  const dmPhone = body.mobile_phone || body.direct_phone || body.phone;
-  const dmLinkedIn = body.linkedin_url || body.person_linkedin_url;
+  if (first(body.industry, body.company_industry)) patch.industry = str(first(body.industry, body.company_industry));
 
-  if (dmName && dmName.trim()) {
-    const newDM = {
-      name: dmName.trim(),
-      title: dmTitle.trim(),
-      email_guess: dmEmail || null,
-      direct_phone: dmPhone || null,
-      linkedin_url: dmLinkedIn || null,
+  const size = first(body.employee_size, body.employee_count, body.employees, body.headcount, body.num_employees, body.size);
+  if (size) patch.employee_size = str(size);
+
+  const revenue = first(body.annual_revenue, body.revenue, body.company_revenue);
+  if (revenue) patch.annual_revenue = str(revenue);
+
+  const linkedinCompany = first(body.company_linkedin_url, body.company_linkedin);
+  if (linkedinCompany) patch.linkedin = str(linkedinCompany);
+
+  const tech = body.tech_stack || body.technologies;
+  if (Array.isArray(tech) && tech.length) patch.tech_stack = tech;
+  else if (typeof tech === 'string' && tech.trim()) patch.tech_stack = tech.split(',').map(t => t.trim()).filter(Boolean);
+
+  // ── Decision maker (person enrichment: PDL primary / RocketReach fallback) ──
+  const fullName = first(body.decision_maker_name, body.full_name, body.person_name, body.ceo_name, body.name);
+  const composedName = (body.first_name || body.last_name)
+    ? [str(body.first_name), str(body.last_name)].filter(Boolean).join(' ') : '';
+  const dmName = fullName || composedName;
+  const dmEmail = first(body.person_email, body.verified_email, body.work_email, body.decision_maker_email, body.email, body.personal_email);
+  const dmPhone = first(body.mobile_phone, body.direct_phone, body.cell_phone, body.person_phone);
+  const dmLinkedIn = first(body.linkedin_url, body.person_linkedin_url, body.linkedin);
+
+  if (dmName) {
+    patch._new_decision_maker = {
+      name: str(dmName),
+      title: str(first(body.decision_maker_title, body.job_title, body.title)) || 'Decision Maker',
+      email_guess: dmEmail ? str(dmEmail) : null,
+      direct_phone: dmPhone ? str(dmPhone) : null,
+      linkedin_url: dmLinkedIn ? str(dmLinkedIn) : null,
       source: 'clay_enrichment',
       verified: true
     };
-    patch._new_decision_maker = newDM;
   }
 
-  // Extract AI Icebreaker or custom script
   if (body.ai_icebreaker || body.clay_pitch) {
     patch._ai_icebreaker = body.ai_icebreaker || body.clay_pitch;
   }

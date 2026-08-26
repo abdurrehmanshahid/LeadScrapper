@@ -16,6 +16,27 @@ app.use(express.static(path.join(__dirname, '../public')));
 // In-memory progress tracker for live scraping terminal
 let currentScrapeJob = { is_running: false, type: null, logs: [] };
 
+// Gemini daily usage tracker — resets at UTC midnight
+const GEMINI_LIMITS = { ai_enrich: 20, deep_research: 500 };
+let geminiUsage = { ai_enrich: 0, deep_research: 0, date: new Date().toISOString().slice(0, 10) };
+
+function checkGeminiDate() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (geminiUsage.date !== today) {
+    geminiUsage = { ai_enrich: 0, deep_research: 0, date: today };
+  }
+}
+
+function geminiLimitReached(type) {
+  checkGeminiDate();
+  return geminiUsage[type] >= GEMINI_LIMITS[type];
+}
+
+function incrementGeminiUsage(type) {
+  checkGeminiDate();
+  geminiUsage[type] = (geminiUsage[type] || 0) + 1;
+}
+
 function addScrapeLog(log) {
   const timestamp = new Date().toLocaleTimeString();
   currentScrapeJob.logs.push(`[${timestamp}] [${log.status || 'INFO'}] ${log.message}`);
@@ -74,6 +95,19 @@ app.post('/api/leads/:id/status', async (req, res) => {
 });
 
 
+// 3b. Append a free-form note to a lead (no status change, never overwrites)
+app.post('/api/leads/:id/note', async (req, res) => {
+  try {
+    const text = (req.body && req.body.text) || '';
+    if (!text.trim()) return res.status(400).json({ error: 'Note text is required' });
+    const updated = await db.appendNote(req.params.id, text);
+    if (!updated) return res.status(404).json({ error: 'Lead not found' });
+    res.json({ success: true, lead: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 4. Manual Enrichment — patch any contact fields on a lead
 app.patch('/api/leads/:id', async (req, res) => {
   try {
@@ -85,8 +119,21 @@ app.patch('/api/leads/:id', async (req, res) => {
   }
 });
 
+// Gemini usage status endpoint
+app.get('/api/gemini-usage', (req, res) => {
+  checkGeminiDate();
+  res.json({
+    ai_enrich:      { used: geminiUsage.ai_enrich,    limit: GEMINI_LIMITS.ai_enrich,    remaining: Math.max(0, GEMINI_LIMITS.ai_enrich    - geminiUsage.ai_enrich) },
+    deep_research:  { used: geminiUsage.deep_research, limit: GEMINI_LIMITS.deep_research, remaining: Math.max(0, GEMINI_LIMITS.deep_research - geminiUsage.deep_research) },
+    reset_at: `${geminiUsage.date}T00:00:00Z`
+  });
+});
+
 // 4b. AI Auto-Enrichment — intelligently research and enrich contact details & decision makers
 app.post('/api/leads/:id/ai-enrich', async (req, res) => {
+  if (geminiLimitReached('ai_enrich')) {
+    return res.status(429).json({ error: `Daily AI Enrich limit reached (${GEMINI_LIMITS.ai_enrich}/day). Resets at UTC midnight.`, limit_reached: true });
+  }
   let browser = null;
   try {
     const lead = await db.getLeadById(req.params.id);
@@ -116,6 +163,7 @@ app.post('/api/leads/:id/ai-enrich', async (req, res) => {
     console.log(`[AI Enrich] Found ${negativeReviews.length} negative reviews for "${lead.name}"`);
 
     // 2. Run Gemini enrichment with real review context
+    incrementGeminiUsage('ai_enrich');
     const enrichment = await enrichLead(lead, negativeReviews);
 
     // 3. Non-destructive merge — never overwrite existing AI data
@@ -199,41 +247,85 @@ app.post('/api/leads/clay-batch-push', async (req, res) => {
   }
 });
 
-// 4e. Inbound Webhook: Clay calls this endpoint when enrichment completes
-app.post('/api/webhooks/clay', async (req, res) => {
+// ── Shared: apply a Clay/enrichment payload (flat record + lead_id) to Mongo ──
+async function applyEnrichmentToLead(body) {
+  const lead_id = body && (body.lead_id || body.id);
+  if (!lead_id) return { status: 400, error: 'Missing lead_id in payload' };
+
+  const lead = await db.getLeadById(lead_id);
+  if (!lead) return { status: 404, error: `Lead with ID ${lead_id} not found` };
+
+  const { processClayEnrichmentPayload } = require('../auditor/clayIntegration');
+  const patch = processClayEnrichmentPayload(body);
+
+  if (patch._new_decision_maker) {
+    const dms = [...(lead.decision_makers || [])];
+    const newDM = patch._new_decision_maker;
+    delete patch._new_decision_maker;
+    newDM.cell = newDM.direct_phone || newDM.cell || null; // UI reads dm.cell
+
+    const idx = dms.findIndex(d => d.name && d.name.toLowerCase() === newDM.name.toLowerCase());
+    if (idx >= 0) {
+      const cur = dms[idx];
+      dms[idx] = {
+        ...cur,
+        title: newDM.title || cur.title,
+        email_guess: newDM.email_guess || cur.email_guess,
+        cell: newDM.cell || cur.cell,
+        direct_phone: newDM.direct_phone || cur.direct_phone,
+        linkedin_url: newDM.linkedin_url || cur.linkedin_url,
+        verified: true,
+        source: 'clay_enrichment'
+      };
+    } else {
+      dms.unshift(newDM);
+    }
+    patch.decision_makers = dms;
+  }
+
+  if (patch._ai_icebreaker) {
+    const bc = lead.battlecard || {};
+    bc.elevator_pitch = patch._ai_icebreaker;
+    patch.battlecard = bc;
+    delete patch._ai_icebreaker;
+  }
+
+  patch.enriched_by = 'clay';
+  patch.enriched_at = new Date().toISOString();
+
+  const updated = await db.updateLeadFields(lead_id, patch);
+  console.log(`[Clay Sync] Enriched "${lead.name}" — fields: ${Object.keys(patch).filter(k => !k.startsWith('_')).join(', ')}`);
+  return { status: 200, lead: updated, updated_fields: Object.keys(patch).filter(k => k !== 'enriched_by' && k !== 'enriched_at') };
+}
+
+// API-key guard — enforced only when CLAY_SYNC_KEY is set in .env (so local dev still works).
+function requireSyncKey(req, res, next) {
+  const key = (process.env.CLAY_SYNC_KEY || '').trim();
+  if (key && req.get('x-api-key') !== key) {
+    return res.status(401).json({ error: 'Invalid or missing x-api-key' });
+  }
+  next();
+}
+
+// 4e. Clay writes here after waterfall enrichment (secured, public via tunnel).
+//     POST a flat JSON record: { "lead_id": "...", <enriched person + company fields> }
+app.post('/api/leads/sync', requireSyncKey, async (req, res) => {
   try {
-    const { lead_id } = req.body;
-    if (!lead_id) return res.status(400).json({ error: 'Missing lead_id in payload' });
-
-    const lead = await db.getLeadById(lead_id);
-    if (!lead) return res.status(404).json({ error: `Lead with ID ${lead_id} not found` });
-
-    const { processClayEnrichmentPayload } = require('../auditor/clayIntegration');
-    const patch = processClayEnrichmentPayload(req.body);
-
-    if (patch._new_decision_maker) {
-      const dms = [...(lead.decision_makers || [])];
-      const newDM = patch._new_decision_maker;
-      delete patch._new_decision_maker;
-
-      if (!dms.some(d => d.name.toLowerCase() === newDM.name.toLowerCase())) {
-        dms.unshift(newDM);
-      }
-      patch.decision_makers = dms;
-    }
-
-    if (patch._ai_icebreaker) {
-      const bc = lead.battlecard || {};
-      bc.elevator_pitch = patch._ai_icebreaker;
-      patch.battlecard = bc;
-      delete patch._ai_icebreaker;
-    }
-
-    const updated = await db.updateLeadFields(lead_id, patch);
-    console.log(`[Clay Webhook] Enriched lead "${lead.name}" with verified phone/email!`);
-    res.json({ success: true, lead: updated });
+    const r = await applyEnrichmentToLead(req.body);
+    res.status(r.status).json(r.status === 200 ? { success: true, lead: r.lead, updated_fields: r.updated_fields } : { error: r.error });
   } catch (err) {
-    console.error('Error processing Clay webhook:', err);
+    console.error('[Clay Sync] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Backward-compat alias (same handler).
+app.post('/api/webhooks/clay', requireSyncKey, async (req, res) => {
+  try {
+    const r = await applyEnrichmentToLead(req.body);
+    res.status(r.status).json(r.status === 200 ? { success: true, lead: r.lead } : { error: r.error });
+  } catch (err) {
+    console.error('[Clay Webhook] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -664,6 +756,176 @@ app.post('/api/leads/import-clay-csv', (req, res) => {
 
     res.json({ success: true, matched, skipped, total: rows.length, message: `Matched ${matched} contacts to leads (${skipped} skipped — no match or duplicate)` });
   });
+});
+
+// 13. Warm Enrich — deep company research (Gemini Google Search + job boards)
+app.post('/api/leads/:id/warm-enrich', async (req, res) => {
+  if (geminiLimitReached('deep_research')) {
+    return res.status(429).json({ error: `Daily Deep Research limit reached (${GEMINI_LIMITS.deep_research}/day). Resets at UTC midnight.`, limit_reached: true });
+  }
+  try {
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { warmEnrichLead } = require('../enricher/companyResearcher');
+    incrementGeminiUsage('deep_research');
+    const intel = await warmEnrichLead(lead);
+
+    const patch = { warm_intel: intel };
+
+    // Merge verified leader into decision_makers if not already present
+    if (intel.verified_leader) {
+      const existing = lead.decision_makers || [];
+      const alreadyHas = existing.some(dm =>
+        dm.name.toLowerCase() === intel.verified_leader.name.toLowerCase()
+      );
+      if (!alreadyHas) {
+        // Remove AI-guessed contacts, add verified one at front
+        patch.decision_makers = [
+          intel.verified_leader,
+          ...existing.filter(dm => dm.source !== 'gemini_ai_enrichment')
+        ];
+      }
+    }
+
+    // Store current ERP as a top-level field for filtering
+    if (intel.current_erp?.length > 0) patch.current_erp = intel.current_erp;
+    if (intel.job_signals?.length > 0) patch.job_signals = intel.job_signals;
+
+    const savedLead = await db.updateLeadFields(lead.id, patch);
+    console.log(`[Warm Enrich] Complete for "${lead.name}" — ${intel.job_count} jobs, ERP: ${(intel.current_erp || []).join(', ') || 'unknown'}`);
+    res.json({ success: true, lead: savedLead, intel });
+  } catch (err) {
+    console.error('[Warm Enrich] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 13a. Sales Briefing — scrape lowest Google reviews, then Gemini analyses them → Odoo mapping
+app.post('/api/leads/:id/grounded-analysis', async (req, res) => {
+  if (geminiLimitReached('deep_research')) {
+    return res.status(429).json({ error: `Daily Deep Research limit reached (${GEMINI_LIMITS.deep_research}/day). Resets at UTC midnight.`, limit_reached: true });
+  }
+  try {
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { groundedBriefing, buildProblemMatrix } = require('../enricher/companyResearcher');
+    const patch = {};
+
+    // 1) Get real BAD (1–2★) reviews. Reuse recent scrape if present, else scrape now.
+    const isBad = (r) => r && r.text && (r.rating == null || r.rating <= 2);
+    let reviews = ((lead.deep_intel && lead.deep_intel.reviews_dataset) || []).filter(isBad);
+    const forceRescrape = req.body && req.body.rescrape;
+    if (forceRescrape || reviews.length < 3) {
+      const { scrapeLowestReviews } = require('../scraper/googleMapsReviews');
+      const scraped = await scrapeLowestReviews(lead.name, lead.location || '', { max: 35, address: lead.address || '' });
+      if (scraped.length) {
+        const deep_intel = { ...(lead.deep_intel || {}), reviews_dataset: scraped, reviews_scraped_at: new Date().toISOString() };
+        // Persist reviews right away so a transient Gemini error doesn't waste the scrape.
+        await db.updateLeadFields(lead.id, { deep_intel });
+        reviews = scraped.filter(isBad);
+      }
+    }
+
+    // 2) Gemini analyses the real reviews → recurring problems + Odoo mapping.
+    //    If Gemini fails (quota/transient), we STILL return the scraped reviews so
+    //    the UI shows something useful instead of a dead error.
+    incrementGeminiUsage('deep_research');
+    let analysis = null, geminiError = null;
+    try {
+      analysis = await groundedBriefing(lead, reviews);
+    } catch (e) {
+      geminiError = e.message;
+    }
+    if (!analysis) {
+      return res.json({
+        success: false,
+        gemini_failed: true,
+        error: geminiError || 'Gemini returned no result (check gemini_key / quota).',
+        reviews_count: reviews.length,
+        reviews: reviews.slice(0, 25)
+      });
+    }
+    analysis.reviews_scraped = reviews.length;
+    // Deterministic problem-frequency matrix over the real reviews (no LLM spend).
+    analysis.problem_matrix = buildProblemMatrix(reviews, analysis);
+    patch.grounded_analysis = analysis;
+
+    const savedLead = await db.updateLeadFields(lead.id, patch);
+    console.log(`[Sales Briefing] "${lead.name}" — ${reviews.length} low reviews, ${(analysis.odoo_mapping || []).length} Odoo mappings`);
+    res.json({ success: true, lead: savedLead, analysis, reviews_count: reviews.length });
+  } catch (err) {
+    console.error('[Sales Briefing] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 12b. Human-edited analysis — accept an edited grounded_analysis (no LLM / no scrape),
+//      recompute the deterministic Problem × Odoo matrix over stored reviews, persist.
+app.post('/api/leads/:id/analysis', async (req, res) => {
+  try {
+    const lead = await db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const incoming = (req.body && req.body.analysis) || {};
+    const { buildProblemMatrix } = require('../enricher/companyResearcher');
+
+    const analysis = { ...(lead.grounded_analysis || {}), ...incoming };
+    analysis.edited_by_human = true;
+    analysis.generated_at = new Date().toISOString();
+
+    const reviews = (lead.deep_intel && lead.deep_intel.reviews_dataset) || [];
+    analysis.problem_matrix = buildProblemMatrix(reviews, analysis);
+    analysis.reviews_scraped = reviews.filter(r => r && r.text && (r.rating == null || r.rating <= 2)).length;
+
+    const savedLead = await db.updateLeadFields(lead.id, { grounded_analysis: analysis });
+    res.json({ success: true, lead: savedLead, analysis });
+  } catch (err) {
+    console.error('[Manual Analysis] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 13b. Background Pre-Enrichment Queue — auto warm-enrich next N leads
+const warmEnrichQueue = new Set();
+
+app.post('/api/leads/pre-enrich-next', async (req, res) => {
+  const { after_id, count = 3 } = req.body;
+  try {
+    const allLeads = await db.getAllLeads();
+    const currentIdx = allLeads.findIndex(l => l.id === after_id);
+    const nextLeads = allLeads
+      .slice(currentIdx + 1, currentIdx + 1 + parseInt(count))
+      .filter(l => !l.warm_intel && !warmEnrichQueue.has(l.id));
+
+    if (nextLeads.length === 0) return res.json({ queued: 0 });
+
+    res.json({ queued: nextLeads.length, leads: nextLeads.map(l => l.name) });
+
+    // Run in background — don't await
+    const { warmEnrichLead } = require('../enricher/companyResearcher');
+    for (const lead of nextLeads) {
+      warmEnrichQueue.add(lead.id);
+      warmEnrichLead(lead)
+        .then(async intel => {
+          const patch = { warm_intel: intel };
+          if (intel.verified_leader) {
+            const existing = lead.decision_makers || [];
+            const alreadyHas = existing.some(dm => dm.name.toLowerCase() === intel.verified_leader.name.toLowerCase());
+            if (!alreadyHas) patch.decision_makers = [intel.verified_leader, ...existing.filter(dm => dm.source !== 'gemini_ai_enrichment')];
+          }
+          if (intel.current_erp?.length > 0) patch.current_erp = intel.current_erp;
+          if (intel.job_signals?.length > 0) patch.job_signals = intel.job_signals;
+          await db.updateLeadFields(lead.id, patch);
+          console.log(`[Pre-Enrich] Done: "${lead.name}"`);
+        })
+        .catch(err => console.warn(`[Pre-Enrich] Failed for "${lead.name}": ${err.message}`))
+        .finally(() => warmEnrichQueue.delete(lead.id));
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 12. Sync & Ingest Enriched AI Leads from JSON

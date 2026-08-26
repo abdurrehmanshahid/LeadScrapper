@@ -1,73 +1,347 @@
-// SDR Caller Client Logic for Big Binary Tech
+// SDR Caller Client Logic for Big Binary Tech - High-Velocity Workspace
 
 let callerLeads = [];
 let currentIndex = 0;
+let activePersona = 'CTO';
+let activeScriptTab = 'talking_points';
+let callTimerInterval = null;
+let callSeconds = 165; // default 02:45
+let _tallySaveTimer = null;
 
-function getSizeTier(lead) {
-  if (lead.out_of_scope) return 'out_of_scope';
-  const s = (lead.employee_size || lead.firmographics?.employee_size || '').toLowerCase().replace(/\s/g, '');
-  if (/^(1-10|1–10|11-50|11–50|1-50)/.test(s)) return 'small';
-  if (/^(51-200|51–200|51-250|51–250|201-250)/.test(s)) return 'medium';
-  if (/^(201-500|251-500|501|251-1|500\+|1000\+|5000\+|10000\+)/.test(s) || parseInt(s) > 250) return 'large';
-  return 'small'; // default unknown to small so they stay visible
+// ── Contact helpers ──────────────────────────────────────────────────────────
+// Unwrap Google ad/search redirects (/aclk, /url) to the real destination.
+function cleanWebsite(url) {
+  if (!url || typeof url !== 'string') return '';
+  let out = url.trim();
+  if (out.includes('/aclk') || /\/url\?/.test(out)) {
+    const m = out.match(/[?&](?:adurl|q)=([^&]+)/);
+    if (m && m[1]) { try { out = decodeURIComponent(m[1]); } catch (_) { out = m[1]; } }
+    else return '';
+  }
+  if (out.startsWith('/')) return '';
+  const host = out.replace(/^https?:\/\//i, '').split('/')[0].toLowerCase();
+  if (/(^|\.)google\.[a-z.]+$/.test(host) || /(^|\.)goo\.gl$/.test(host) ||
+      /google\.[a-z.]+\/(aclk|url|search|maps)/i.test(out)) return '';
+  out = stripTrackingParams(out);
+  if (!/^https?:\/\//i.test(out)) out = 'https://' + out;
+  return out;
 }
+
+const TRACKING_PARAM = /^(utm_|gclid|gclsrc|dclid|fbclid|msclkid|yclid|mc_cid|mc_eid|_ga|_gl|ref|referrer|source|medium|campaign|gmb)/i;
+function stripTrackingParams(url) {
+  const q = url.indexOf('?');
+  if (q === -1) return url;
+  const base = url.slice(0, q);
+  const kept = url.slice(q + 1).split('&').filter(p => { const k = p.split('=')[0]; return k && !TRACKING_PARAM.test(k); });
+  return kept.length ? `${base}?${kept.join('&')}` : base;
+}
+
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const shortHost = (u) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+
+// Business phone numbers as [{label, number}] — back-compatible with the old single lead.phone.
+function getLeadPhones(lead) {
+  if (Array.isArray(lead.phones) && lead.phones.length) {
+    return lead.phones
+      .map(p => typeof p === 'string' ? { label: 'Main', number: p } : { label: (p && p.label) || 'Main', number: (p && p.number) || '' })
+      .filter(p => p.number);
+  }
+  return lead.phone ? [{ label: 'Main', number: lead.phone }] : [];
+}
+function primaryPhone(lead) {
+  const p = getLeadPhones(lead);
+  return p.length ? p[0].number : '';
+}
+
+function contactLine(label, valueHtml) {
+  return `<div class="contact-line"><span class="contact-key">${label}</span>` +
+         `<span class="contact-val">${valueHtml || '—'}</span></div>`;
+}
+
+function linkHtml(url, text) {
+  if (!url) return '';
+  const safe = esc(url);
+  return `<a href="${safe}" target="_blank" rel="noopener">${esc(text || url)}</a>`;
+}
+
+// Small monochrome pencil for "edit" affordances.
+const PENCIL_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const editPencil = (label = 'Edit') => `<button class="edit-pencil" onclick="openEditModal()" title="Edit all lead details">${PENCIL_SVG} ${label}</button>`;
+
+// Surface website / LinkedIn / phone / email + top-3 decision makers on top.
+function renderContactBlock(lead) {
+  const box = document.getElementById('contactStrip');
+  if (!box) return;
+
+  const web = cleanWebsite(lead.website);
+  const dms = (lead.decision_makers || []);
+
+  const dmCards = dms.length ? dms.map(dm => `
+    <div class="dm-chip">
+      <div class="dm-chip-head">
+        <span class="dm-chip-name">${esc(dm.name || 'Decision Maker')}</span>
+        <span class="dm-chip-title">${esc(dm.title || dm.persona_label || '')}</span>
+      </div>
+      <div class="dm-chip-lines">
+        ${contactLine('Cell', dm.cell ? linkHtml('tel:' + dm.cell, dm.cell) : '')}
+        ${contactLine('Email', dm.email_guess ? linkHtml('mailto:' + dm.email_guess, dm.email_guess) : '')}
+        ${contactLine('LinkedIn', dm.linkedin_url ? linkHtml(dm.linkedin_url, 'View profile') : '')}
+      </div>
+    </div>`).join('') : '<div class="contact-empty">No decision makers captured yet — click Add Person.</div>';
+
+  const phones = getLeadPhones(lead);
+  const phoneLines = phones.length
+    ? phones.map(p => contactLine(esc(p.label || 'Phone'), linkHtml('tel:' + p.number, esc(p.number)))).join('')
+    : contactLine('Phone', '');
+
+  box.innerHTML = `
+    <div class="contact-grid">
+      <div class="contact-company">
+        <div class="contact-block-title contact-title-row"><span>Company Contact</span>${editPencil()}</div>
+        ${contactLine('Website', web ? linkHtml(web, shortHost(web)) : '')}
+        ${contactLine('LinkedIn', lead.linkedin ? linkHtml(lead.linkedin, 'Company page') : '')}
+        ${phoneLines}
+        ${contactLine('Email', lead.email ? linkHtml('mailto:' + lead.email, lead.email) : '')}
+      </div>
+      <div class="contact-dms">
+        <div class="contact-block-title contact-title-row">
+          <span>Decision Makers${dms.length ? ` (${dms.length})` : ''}</span>
+          <span class="contact-title-actions">
+            <button class="edit-pencil" onclick="openAddPersonModal()" title="Add a new person">+ Add Person</button>
+            ${editPencil('Edit')}
+          </span>
+        </div>
+        <div class="dm-chip-grid">${dmCards}</div>
+      </div>
+    </div>`;
+}
+
+// 8 Buyer Persona Knowledge Base & Diagnostic Playbooks
+const PERSONA_PLAYBOOKS = {
+  CTO: {
+    title: 'CTO / VP Engineering',
+    focus: 'Tech Debt, Version Upgrades & Partner SLAs',
+    leakEst: '$120,000 - $240,000',
+    talking_points: [
+      'Identified legacy software tech debt and unpatched dependencies creating performance bottlenecks.',
+      'Average agency partner bill rates of $180+/hr for routine bug fixes vs. Big Binary 24/7 dedicated SLA at 60% lower cost.',
+      'API resilience & real-time webhook bridging for zero-downtime operations.'
+    ],
+    questions: [
+      'How are you currently handling ERP custom module maintenance and security patches?',
+      'What is your team’s biggest friction point when integrating third-party APIs or webhooks?',
+      'Are slow external developer response times delaying your sprint velocity?'
+    ],
+    value_propos: [
+      '24/7 SLA infrastructure support with sub-1-hour critical response guarantee.',
+      'Full CI/CD pipeline automation and zero-downtime v18 migrations.'
+    ],
+    prescription: [
+      'Step 1: Automated Technographic & Code Security Audit (0 cost).',
+      'Step 2: Staging sandbox verification & database migration plan.',
+      'Step 3: 24/7 SLA support activation.'
+    ]
+  },
+  CFO: {
+    title: 'CFO / Head of Finance',
+    focus: 'E-Invoicing Compliance, AP/AR & License Savings',
+    leakEst: '$95,000 - $180,000',
+    talking_points: [
+      'Replacing 4 disconnected SaaS subscriptions with unified operations cuts monthly software spend by 40%.',
+      'Automated AP/AR reconciliation eliminates month-end closing delays from 5 days to under 4 hours.',
+      'Full ZATCA (GCC) and Making Tax Digital (UK) compliant e-invoicing workflows.'
+    ],
+    questions: [
+      'How many days does your finance team spend on manual invoice reconciliation each month-end?',
+      'Are you paying redundant licenses across multiple point solutions like QuickBooks, Salesforce, and inventory tools?'
+    ],
+    value_propos: [
+      'Unified financial ledger with real-time gross margin reporting.',
+      'Direct ERP bank feed integration & automated VAT/tax compliance.'
+    ],
+    prescription: [
+      'Step 1: 30-minute financial workflow & SaaS cost audit.',
+      'Step 2: Automated billing bridge deployment.',
+      'Step 3: Full month-end close automation.'
+    ]
+  },
+  COO: {
+    title: 'COO / VP of Operations',
+    focus: 'Inventory Variance, Field Job Dispatch & Hand-off Delays',
+    leakEst: '$140,000 - $260,000',
+    talking_points: [
+      'Eliminating manual spreadsheet coordination between sales and field operations.',
+      'Real-time multi-warehouse inventory synchronization prevents stockouts and missed delivery SLAs.',
+      'Unified customer intake to automated job dispatch in under 60 seconds.'
+    ],
+    questions: [
+      'Where is the biggest operational hand-off delay occurring between receiving an order and fulfilling it?',
+      'How do you currently track live job progress and technician dispatch?'
+    ],
+    value_propos: [
+      'End-to-end operational visibility from lead capture to final delivery.',
+      'Automated mobile field service dispatch with client live tracking.'
+    ],
+    prescription: [
+      'Step 1: Process map & operational bottleneck identification.',
+      'Step 2: Custom field dispatch & stock sync rollout in 14 days.',
+      'Step 3: Staff training and go-live.'
+    ]
+  },
+  RevOps: {
+    title: 'Head of RevOps / CRM Lead',
+    focus: 'HubSpot/Salesforce Disconnect & Lead Leakage',
+    leakEst: '$85,000 - $160,000',
+    talking_points: [
+      'Preventing sales reps from wasting 3 hours daily on manual double-entry between CRM and ERP billing.',
+      'Automated WhatsApp and web inquiry routing directly into active sales pipelines.',
+      'Accurate pipeline-to-revenue attribution and commission reporting.'
+    ],
+    questions: [
+      'Are your sales reps manually re-entering closed deals into invoicing tools?',
+      'How quickly are inbound web leads routed to an active sales rep?'
+    ],
+    value_propos: [
+      'Bi-directional HubSpot/Salesforce to Odoo synchronization.',
+      'Automated instant lead enrichment and consultative battlecard prompts.'
+    ],
+    prescription: [
+      'Step 1: Pipeline data flow & lead leakage review.',
+      'Step 2: Webhook bridge setup.',
+      'Step 3: Automated commission & revenue dashboards.'
+    ]
+  },
+  Founder: {
+    title: 'Founder / CEO / Managing Director',
+    focus: 'Overhead Drag, Scaling Velocity & Agile Tech Arm',
+    leakEst: '$150,000 - $300,000',
+    talking_points: [
+      'Acting as your agile outsourced CTO & operations tech arm at a fraction of full-time hiring cost.',
+      'Modernizing company infrastructure so you can double transaction volume without doubling administrative headcount.',
+      'Turnkey 30-day rollouts with zero business downtime guaranteed.'
+    ],
+    questions: [
+      'Is administrative complexity holding back your ability to scale into new markets?',
+      'If you could automate your top 3 back-office bottlenecks this month, what would that unlock for growth?'
+    ],
+    value_propos: [
+      'Turnkey operational modernization executed in 30 days.',
+      '60% reduction in back-office administrative overhead.'
+    ],
+    prescription: [
+      'Step 1: Executive strategic diagnostic call.',
+      'Step 2: Phased agile implementation blueprint.',
+      'Step 3: Full execution with guaranteed ROI.'
+    ]
+  },
+  VP_Eng: {
+    title: 'VP of Engineering',
+    focus: 'Legacy Refactoring & CI/CD Pipelines',
+    leakEst: '$110,000 - $220,000',
+    talking_points: [
+      'Automated testing suites and containerized deployment for custom business applications.',
+      'Migrating brittle monolith legacy systems to clean microservices and modern APIs.'
+    ],
+    questions: [
+      'What percentage of your engineering capacity is drained by legacy system maintenance?'
+    ],
+    value_propos: [
+      'High-velocity refactoring sprint delivery with 99.9% uptime SLA.'
+    ],
+    prescription: [
+      'Step 1: Architecture review.',
+      'Step 2: Refactoring sprint.',
+      'Step 3: Deployment automation.'
+    ]
+  },
+  IT_Director: {
+    title: 'IT Director / Infrastructure Lead',
+    focus: 'Security, Backups & Hardware Integrations',
+    leakEst: '$75,000 - $150,000',
+    talking_points: [
+      'Automated daily cloud backups, SSL management, and ISO-standard access controls.',
+      'Hardware POS integration and IoT device telemetry.'
+    ],
+    questions: [
+      'What is your current disaster recovery RTO/RPO for core business databases?'
+    ],
+    value_propos: [
+      'Enterprise-grade security hardening and cloud database resilience.'
+    ],
+    prescription: [
+      'Step 1: Vulnerability & backup audit.',
+      'Step 2: Hardening roadmap.',
+      'Step 3: 24/7 monitoring.'
+    ]
+  },
+  Product_Lead: {
+    title: 'Product & Automation Lead',
+    focus: 'Workflow Automation & Customer Portals',
+    leakEst: '$60,000 - $130,000',
+    talking_points: [
+      'Self-service customer portals for job tracking, invoice download, and instant appointment booking.',
+      'No-code n8n workflow bridges connecting all disparate business webhooks.'
+    ],
+    questions: [
+      'Do your customers have a self-service portal, or must they email your staff for basic updates?'
+    ],
+    value_propos: [
+      'Branded client self-service portal delivered in 14 days.'
+    ],
+    prescription: [
+      'Step 1: UX & workflow audit.',
+      'Step 2: Portal customization.',
+      'Step 3: Customer rollout.'
+    ]
+  }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetId = urlParams.get('id');
 
+  initCallControlIcons();
   await loadCallerLeads(targetId);
+  startCallTimer();
 
-  document.getElementById('prevLeadBtn').addEventListener('click', () => navigateLead(-1));
-  document.getElementById('nextLeadBtn').addEventListener('click', () => navigateLead(1));
-  document.getElementById('callerCategoryFilter').addEventListener('change', () => loadCallerLeads());
-  document.getElementById('callerSizeFilter')?.addEventListener('change', () => loadCallerLeads());
+  // Header navigation buttons (previously keyboard-only)
+  document.getElementById('prevLeadBtn')?.addEventListener('click', () => navigateLead(-1));
+  document.getElementById('nextLeadBtn')?.addEventListener('click', () => navigateLead(1));
 
-  // Keyboard shortcuts — only when not typing in the notes input
+  // Keyboard Shortcuts
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); navigateLead(-1); }
+
+    if (e.key === 'ArrowLeft') { e.preventDefault(); navigateLead(-1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); navigateLead(1); }
+    if (e.key === ' ') { e.preventDefault(); openOutcomeModal(); }
+    if (e.key === 'Enter') { e.preventDefault(); dialActiveLead(); }
     if (e.key === '1') logOutcome('Interested');
     if (e.key === '2') logOutcome('Callback Requested');
     if (e.key === '3') logOutcome('No Answer / Voicemail');
     if (e.key === '4') logOutcome('Not a Fit');
+    if (e.key === '5') logOutcome('Do Not Call');
   });
+
+  // Render Initial Objections
+  renderObjections();
 });
 
 async function loadCallerLeads(targetId = null) {
-  const category = document.getElementById('callerCategoryFilter').value;
-  const sizeFilter = document.getElementById('callerSizeFilter')?.value || 'ALL';
-  const params = new URLSearchParams();
-  if (category !== 'ALL') params.append('category', category);
-
   try {
-    const res = await fetch(`/api/leads?${params.toString()}`);
+    const res = await fetch('/api/leads');
     const data = await res.json();
-    let leads = data.leads || [];
-
-    // Size filter — applied client-side using getSizeTier()
-    if (sizeFilter !== 'ALL') {
-      leads = leads.filter(l => getSizeTier(l) === sizeFilter);
-    } else {
-      // Default: hide out_of_scope unless explicitly selected
-      leads = leads.filter(l => getSizeTier(l) !== 'out_of_scope');
-    }
-
-    callerLeads = leads;
+    callerLeads = data.leads || [];
 
     if (callerLeads.length === 0) {
-      document.getElementById('noLeadsMessage').style.display = 'block';
-      document.getElementById('leadContentWrapper').style.display = 'none';
+      document.getElementById('callCompanyName').textContent = 'No leads available';
       document.getElementById('leadCounter').textContent = 'Lead 0 of 0';
       return;
     }
 
-    document.getElementById('noLeadsMessage').style.display = 'none';
-    document.getElementById('leadContentWrapper').style.display = 'block';
-
     if (targetId) {
-      const idx = callerLeads.findIndex(l => l.id === targetId);
+      const idx = callerLeads.findIndex(l => (l.id === targetId || l._id === targetId));
       currentIndex = idx >= 0 ? idx : 0;
     } else {
       currentIndex = 0;
@@ -75,16 +349,8 @@ async function loadCallerLeads(targetId = null) {
 
     renderActiveLead();
   } catch (err) {
-    console.error('Failed to load caller leads:', err);
+    console.error('Failed to load leads:', err);
   }
-}
-
-function navigateLead(direction) {
-  if (callerLeads.length === 0) return;
-  currentIndex += direction;
-  if (currentIndex < 0) currentIndex = callerLeads.length - 1;
-  if (currentIndex >= callerLeads.length) currentIndex = 0;
-  renderActiveLead();
 }
 
 function renderActiveLead() {
@@ -92,1204 +358,916 @@ function renderActiveLead() {
   if (!lead) return;
 
   document.getElementById('leadCounter').textContent = `Lead ${currentIndex + 1} of ${callerLeads.length}`;
+  document.getElementById('callCompanyName').textContent = lead.name || 'Enterprise Prospect';
+  document.getElementById('callPhoneNumber').textContent = primaryPhone(lead) || '(555) 382-9912';
 
   const isRescue = lead.category === 'BPO_RESCUE';
   const catBadge = document.getElementById('callCategoryBadge');
-  catBadge.textContent = isRescue ? '🛡️ ODOO BPO / RESCUE' : '📍 NEW IMPLEMENTATION';
+  catBadge.textContent = isRescue ? 'ODOO BPO / RESCUE' : 'NEW IMPLEMENTATION';
   catBadge.className = isRescue ? 'badge badge-rescue' : 'badge badge-new';
 
-  const scorePill = document.getElementById('callScorePill');
-  const successChance = lead.success_chance_pct || lead.success_chance || lead.opportunity?.success_chance_percentage || 70;
-  scorePill.textContent = `🎯 ${successChance}% Success Chance (${lead.fit_tier || lead.opportunity?.fit_tier || 'Solid Opportunity'})`;
+  const score = lead.success_chance_pct || 85;
+  document.getElementById('callScorePill').textContent = `${score}% Propensity Fit`;
 
-  // Size badge
-  const sizeTier = getSizeTier(lead);
-  const sizeBadgeEl = document.getElementById('callSizeBadge');
-  if (sizeBadgeEl) {
-    const sizeLabels = { small: '🟢 Small', medium: '🟡 Medium', large: '🔴 Large', out_of_scope: '⛔ Too Large' };
-    const sizeColors = { small: '#22c55e', medium: '#f59e0b', large: '#ef4444', out_of_scope: '#7c3aed' };
-    sizeBadgeEl.textContent = sizeLabels[sizeTier] || sizeTier;
-    sizeBadgeEl.style.color = sizeColors[sizeTier] || '#94a3b8';
-    sizeBadgeEl.style.display = 'inline';
-    if (lead.out_of_scope_reason) sizeBadgeEl.title = lead.out_of_scope_reason;
+  // Update Radial Gauge Meter (Slide 3)
+  const vulnerabilityScore = Math.min(95, Math.max(45, score + 5));
+  document.getElementById('gaugePercentText').textContent = `${vulnerabilityScore}%`;
+  const dashOffset = Math.round(471 - (471 * vulnerabilityScore) / 100);
+  document.getElementById('gaugeProgressCircle').style.strokeDashoffset = dashOffset;
+  
+  const riskLabel = document.getElementById('gaugeRiskLabel');
+  if (vulnerabilityScore >= 80) {
+    riskLabel.textContent = 'High Risk';
+    riskLabel.style.color = '#fb7185';
+  } else {
+    riskLabel.textContent = 'Moderate Risk';
+    riskLabel.style.color = '#fbbf24';
   }
 
-  document.getElementById('callCompanyName').textContent = lead.name;
-  const callerMetaParts = [
-    lead.industry || 'Industry',
-    lead.location || 'Metro',
-    `Team: ${lead.employee_size || '11-50'}`,
-    lead.rating ? (lead.reviews_count && lead.reviews_count > 0 ? `⭐ ${lead.rating} (${lead.reviews_count} reviews)` : `⭐ ${lead.rating} (Star Rating)`) : null,
-    lead.email ? `✉ ${lead.email}` : null
-  ].filter(Boolean);
-  document.getElementById('callCompanyMeta').textContent = callerMetaParts.join(' • ');
+  // Surface essential contact info + top-3 decision makers on top
+  renderContactBlock(lead);
 
-  const phone = lead.phone || '';
-  const isMissingPhone = !phone || phone === '(555) 000-0000';
-  document.getElementById('callPhoneNumber').innerHTML = isMissingPhone
-    ? `<span style="color: #64748b; font-size: 0.9rem;">No phone found</span>
-       <button onclick="editCurrentPhone()"
-         style="background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.4); color: #fbbf24; border-radius: 6px; padding: 0.18rem 0.55rem; font-size: 0.72rem; cursor: pointer; font-weight: 700; margin-left: 8px;">
-         ✏️ Add Phone
-       </button>`
-    : `<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ''))}" style="color: #818cf8; text-decoration: none;" title="Click to Dial">${escapeHtml(phone)}</a>
-       <button onclick="copyCurrentPhone()" style="background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); margin-left: 6px;" title="Copy">📋</button>
-       <button onclick="editCurrentPhone()" style="background: none; border: none; cursor: pointer; font-size: 0.8rem; color: var(--text-muted); margin-left: 2px;" title="Edit phone">✏️</button>`;
+  // Grounded intelligence: reviews → Odoo mapping + verified contacts
+  renderGroundedAnalysis(lead);
 
-  // Reset edit phone row
-  const editPhoneRow = document.getElementById('callEditPhoneRow');
-  if (editPhoneRow) editPhoneRow.style.display = 'none';
-  const editPhoneInput = document.getElementById('editPhoneInput');
-  if (editPhoneInput) editPhoneInput.value = '';
-
-  const webLink = document.getElementById('callWebsiteLink');
-  if (webLink) {
-    webLink.innerHTML = lead.website 
-      ? `<a href="${lead.website}" target="_blank" style="color: #38bdf8; text-decoration: none;">${lead.website.replace(/^https?:\/\//, '').split('/')[0]} ↗</a>` 
-      : '';
-  }
-
-  // Decision Makers — reads flat field or raw JSON field name
-  const dms = (lead.decision_makers?.length && lead.decision_makers)
-    || (lead.decision_maker_contacts?.length && lead.decision_maker_contacts.map(dm => ({
-        name: dm.name, title: dm.title, email_guess: dm.email || dm.email_guess
-      })))
-    || [];
-  const dmSection = document.getElementById('callDecisionMakersSection');
-  if (dmSection) dmSection.style.display = 'block';
-  const dmContainer = document.getElementById('callDecisionMakers');
-  if (dmContainer) {
-    if (dms.length > 0) {
-      dmContainer.innerHTML = dms.map((dm, idx) => {
-        const safeName = (dm.name || 'Executive').replace(/'/g, "\\'");
-        const isAiGuess = dm.source === 'gemini_ai_enrichment' || dm.verified === false;
-        const linkedinBtn = dm.linkedin_url
-          ? `<a href="${escapeHtml(dm.linkedin_url)}" target="_blank" style="font-size: 0.7rem; color: #818cf8; text-decoration: none; margin-left: 6px;">🔗 LinkedIn ↗</a>`
-          : '';
-        const guessBadge = isAiGuess
-          ? `<span style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:1px 5px;border-radius:4px;font-size:0.62rem;font-weight:800;margin-left:5px;" title="AI guessed — not verified">AI GUESS</span>`
-          : '';
-        const emailHint = dm.email_guess
-          ? `<div style="font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">✉ ${escapeHtml(dm.email_guess)}${isAiGuess ? ' <span style="color:#fbbf24;font-size:0.6rem;">(unverified)</span>' : ''}</div>`
-          : '';
-        return `
-          <div style="background: rgba(167,139,250,0.1); border: 1px solid ${isAiGuess ? 'rgba(251,191,36,0.25)' : 'rgba(167,139,250,0.3)'}; border-radius: 8px; padding: 0.6rem 0.9rem; position: relative;">
-            <button onclick="removeDecisionMaker(${idx})" title="Remove this contact" style="position:absolute;top:5px;right:6px;background:none;border:none;color:#475569;cursor:pointer;font-size:0.75rem;line-height:1;padding:2px 4px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">✕</button>
-            <div style="font-weight: 700; color: #f1f5f9; font-size: 0.875rem; cursor:pointer;" onclick="navigator.clipboard.writeText('${safeName}'); showToast('📋 ${safeName} copied!');" title="Click to copy">${escapeHtml(dm.name)}${guessBadge}${linkedinBtn}</div>
-            <div style="font-size: 0.775rem; color: #a78bfa;">${escapeHtml(dm.title || 'Decision Maker')}</div>
-            ${emailHint}
-          </div>`;
-      }).join('');
-    } else {
-      const cleanComp = lead.name.replace(/(\b(inc|llc|ltd|corp|corporation|co|group|services|company|l\.l\.c)\b\.?)/gi, '').trim() || lead.name;
-      const liSearch = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Manager OR President')}`;
-      const gSearch = `https://www.google.com/search?q=${encodeURIComponent(cleanComp + ' CEO OR Owner OR Founder OR Director site:linkedin.com/in')}`;
-      dmContainer.innerHTML = `
-        <div style="font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.2rem 0;">
-          <span>No contacts found — search manually:</span>
-          <a href="${liSearch}" target="_blank" style="color: #818cf8; text-decoration: none; font-weight: 600;">🔗 LinkedIn ↗</a>
-          <a href="${gSearch}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 600;">🔍 Google ↗</a>
-        </div>`;
-    }
-  }
-
-  // Pre-Call Intelligence Dossier (deep_intel)
-  renderIntelDossier(lead);
-
-  // AI Review Audit Dossier & Semantic Fit
-  const dossierSection = document.getElementById('callDossierSection');
-  const dossierText = document.getElementById('callDossierText');
-  const semanticFitBadge = document.getElementById('callSemanticFitBadge');
-  const dossier = lead.review_dossier || (lead.battlecard && lead.battlecard.review_dossier);
-  const csFit = lead.case_study_fit || (lead.battlecard && lead.battlecard.case_study_fit);
-
-  if (dossier && dossier.summary && dossierSection && dossierText) {
-    dossierSection.style.display = 'block';
-    const dossierParts = dossier.parts && dossier.parts.length > 0 ? dossier.parts : [dossier.summary];
-    dossierText.innerHTML = dossierParts.map((p, i) => {
-      const icons = ['🏢', '💬', '💼', '📝', '📰'];
-      return `<span style="display:block; margin-bottom: ${i < dossierParts.length - 1 ? '0.5rem' : '0'}; line-height: 1.5;">${icons[i] || '•'} ${escapeHtml(p)}</span>`;
-    }).join('');
-    if (semanticFitBadge) {
-      if (csFit && csFit.semantic_fit_pct) {
-        semanticFitBadge.textContent = `🎯 ${csFit.semantic_fit_pct}% Case Study Fit (${csFit.matched_case_study})`;
-      } else {
-        semanticFitBadge.textContent = `🚨 ${dossier.top_friction || 'High Priority'}`;
-      }
-    }
-  } else if (dossierSection) {
-    dossierSection.style.display = 'none';
-  }
-
-  // Opportunity Bar & Fit Tier
-  const fitTierEl = document.getElementById('callFitTierBadge');
-  if (fitTierEl) {
-    fitTierEl.textContent = `🌟 ${lead.fit_tier || lead.opportunity?.fit_tier || 'Solid Opportunity (Tier 2)'}`;
-  }
-  const dealTierEl = document.getElementById('callDealTierBadge');
-  if (dealTierEl) {
-    dealTierEl.textContent = `💰 ${lead.estimated_deal_tier || lead.opportunity?.estimated_deal_tier || lead.deal_type || '$25,000 - $75,000'}`;
-  }
-  const archetypeEl = document.getElementById('callArchetypeBadge');
-  if (archetypeEl) {
-    archetypeEl.textContent = `🏢 ${lead.business_archetype || lead.firmographics?.business_archetype || lead.industry || 'Healthcare & Commercial'}`;
-  }
-
-  // Recommended Odoo Modules — reads flat field, nested odoo_playbook, or nested odoo_sales_playbook
-  const modulesContainer = document.getElementById('callRecommendedModules');
-  if (modulesContainer) {
-    const modules = (lead.recommended_modules?.length && lead.recommended_modules)
-      || (lead.odoo_playbook?.recommended_odoo_modules?.length && lead.odoo_playbook.recommended_odoo_modules)
-      || (lead.odoo_sales_playbook?.recommended_odoo_modules?.length && lead.odoo_sales_playbook.recommended_odoo_modules)
-      || ['Odoo CRM', 'Odoo Invoicing & Accounting', 'Odoo Documents', 'Odoo Helpdesk', 'Odoo Appointments'];
-    modulesContainer.innerHTML = modules.map(m => `
-      <span style="background: rgba(99,102,241,0.2); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.4); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.775rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-        📦 ${escapeHtml(m)}
-      </span>
-    `).join('');
-  }
-
-  // 6-Phase Roadmap — reads flat field, nested odoo_playbook, or nested odoo_sales_playbook
-  const roadmapContainer = document.getElementById('callRoadmapList');
-  if (roadmapContainer) {
-    const roadmap = (lead.action_plan_roadmap?.length && lead.action_plan_roadmap)
-      || (lead.odoo_playbook?.action_plan_roadmap?.length && lead.odoo_playbook.action_plan_roadmap)
-      || (lead.odoo_sales_playbook?.action_plan_roadmap?.length && lead.odoo_sales_playbook.action_plan_roadmap)
-      || [
-          'Phase 1: Business Process Mapping & Gap Analysis',
-          'Phase 2: Odoo Enterprise Instance Setup & Chart of Accounts Configuration',
-          'Phase 3: Legacy Data Cleansing & Migration',
-          'Phase 4: Custom Workflow Automation & 3rd-party App Integrations',
-          'Phase 5: User Acceptance Testing (UAT) & Staff Training',
-          'Phase 6: Go-Live Support & Ongoing Optimization'
-        ];
-    roadmapContainer.innerHTML = roadmap.map(r => `
-      <div style="display: flex; align-items: baseline; gap: 6px; line-height: 1.4;">
-        <span style="color: #38bdf8; font-weight: 800;">•</span>
-        <span>${escapeHtml(r)}</span>
-      </div>
-    `).join('');
-  }
-
-  // Problem Analysis — structured problems with review counts and Odoo fixes
-  const problemList = document.getElementById('callProblemList');
-  if (problemList) {
-    const riskLevel = lead.risk_level || lead.problem_analysis?.risk_level || lead.problem_and_sentiment_analysis?.risk_level || '';
-
-    // Try structured identified_problems first
-    const structured = lead.identified_problems
-      || lead.problem_analysis?.identified_problems
-      || lead.problem_and_sentiment_analysis?.identified_problems
-      || [];
-
-    if (structured.length > 0) {
-      const riskBadge = riskLevel
-        ? `<div style="margin-bottom:8px;"><span style="background:rgba(244,63,94,0.15);color:#f87171;border:1px solid rgba(244,63,94,0.35);padding:1px 7px;border-radius:4px;font-size:0.7rem;font-weight:800;text-transform:uppercase;">Risk: ${escapeHtml(riskLevel)}</span></div>`
-        : '';
-      problemList.innerHTML = riskBadge + structured.map(p => `
-        <div style="margin-bottom:12px; padding:10px 12px; background:rgba(0,0,0,0.2); border-left:3px solid rgba(248,113,113,0.5); border-radius:0 6px 6px 0;">
-          <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:5px;">
-            <span style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:1px 6px;border-radius:10px;font-size:0.68rem;font-weight:800;white-space:nowrap;flex-shrink:0;">${p.review_count || '?'} reviews</span>
-            <span style="font-size:0.82rem;color:#e2e8f0;font-weight:600;">${escapeHtml(p.problem || '')}</span>
-          </div>
-          ${p.review_evidence ? `<div style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-bottom:5px;padding-left:2px;">"${escapeHtml(p.review_evidence)}"</div>` : ''}
-          <div style="display:flex;align-items:flex-start;gap:5px;">
-            <span style="color:#818cf8;font-size:0.7rem;font-weight:800;flex-shrink:0;margin-top:1px;">→ ODOO FIX:</span>
-            <span style="font-size:0.75rem;color:#a5b4fc;">${escapeHtml(p.odoo_fix || '')}</span>
-          </div>
-        </div>
-      `).join('');
-    } else {
-      // Fallback: flat arrays (legacy enriched leads)
-      const painPoints = lead.customer_pain_points
-        || lead.problem_analysis?.customer_patient_pain_points
-        || lead.problem_and_sentiment_analysis?.customer_patient_pain_points
-        || [];
-      const bottlenecks = lead.operational_bottlenecks
-        || lead.problem_analysis?.internal_operational_bottlenecks
-        || lead.problem_and_sentiment_analysis?.internal_operational_bottlenecks
-        || [];
-      const bc = lead.battlecard || {};
-      const problems = painPoints.length > 0
-        ? [...painPoints, ...bottlenecks]
-        : (bc.problem_analysis?.length > 0 ? bc.problem_analysis
-            : [`Site last updated around ${lead.copyright_year || '2019'} with no client portal.`,
-               `Operating on manual spreadsheets/disconnected accounting.`]);
-
-      const riskBadge = riskLevel
-        ? `<div style="margin-bottom:8px;"><span style="background:rgba(244,63,94,0.15);color:#f87171;border:1px solid rgba(244,63,94,0.35);padding:1px 7px;border-radius:4px;font-size:0.7rem;font-weight:800;text-transform:uppercase;">Risk: ${escapeHtml(riskLevel)}</span></div>`
-        : '';
-      problemList.innerHTML = riskBadge + `<ul style="margin:0;padding-left:1.2rem;">` + problems.map(p => `<li style="margin-bottom:5px;font-size:0.82rem;">${escapeHtml(p)}</li>`).join('') + `</ul>`;
-    }
-  }
-
-  // Set Persona Script
-  setCallerPersona('FOUNDER_CEO');
-
-  // Objection Handlers
-  const objList = document.getElementById('callObjectionsList');
-  if (objList) {
-    const bc = lead.battlecard || {};
-    const objections = bc.objection_handlers && bc.objection_handlers.length > 0
-      ? bc.objection_handlers
-      : [
-          { objection: '"We already use QuickBooks / spreadsheets and it works fine."', counter: '"QuickBooks is great for taxes, but Odoo connects your field jobs, inventory, client portal, and automated billing with zero double-entry."' },
-          { objection: '"We don\'t have budget for a big IT project right now."', counter: '"Odoo typically replaces 3 to 4 separate software subscriptions you are already paying for. Most clients see the system pay for itself in the first 60 days from labor savings alone."' }
-        ];
-
-    objList.innerHTML = objections.map(o => `
-      <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.825rem;">
-        <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.2rem;">${escapeHtml(o.objection)}</div>
-        <div style="color: #cbd5e1;">↳ ${escapeHtml(o.counter)}</div>
-      </div>
-    `).join('');
-  }
-
-  const notesEl = document.getElementById('callNotesInput');
-  if (notesEl) notesEl.value = lead.notes || '';
-
-  const followUpBadge = document.getElementById('callScheduledFollowUpBadge');
-  if (followUpBadge) {
-    if (lead.follow_up_date) {
-      followUpBadge.textContent = `⏰ Follow-up: ${new Date(lead.follow_up_date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
-      followUpBadge.style.display = 'inline-block';
-      followUpBadge.style.color = '#fbbf24';
-      followUpBadge.style.background = 'rgba(245, 158, 11, 0.15)';
-      followUpBadge.style.borderColor = 'rgba(245, 158, 11, 0.35)';
-    } else if (lead.call_status && lead.call_status !== 'Uncalled') {
-      const isInterested = lead.call_status === 'Interested';
-      const isNotFit = lead.call_status === 'Not a Fit';
-      followUpBadge.textContent = `${isInterested ? '✅' : isNotFit ? '❌' : '●'} Status: ${lead.call_status}`;
-      followUpBadge.style.display = 'inline-block';
-      followUpBadge.style.color = isInterested ? '#34d399' : isNotFit ? '#fb7185' : '#94a3b8';
-      followUpBadge.style.background = isInterested ? 'rgba(16, 185, 129, 0.15)' : isNotFit ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)';
-      followUpBadge.style.borderColor = isInterested ? 'rgba(16, 185, 129, 0.35)' : isNotFit ? 'rgba(244, 63, 94, 0.35)' : 'rgba(255, 255, 255, 0.1)';
-    } else {
-      followUpBadge.style.display = 'none';
-    }
-  }
+  // Render Battlecard Script Content + company-aware objections
+  renderScriptContent();
+  renderObjections();
 }
 
+// Render the persisted Gemini grounded analysis (or an idle prompt) for a lead.
+function renderGroundedAnalysis(lead) {
+  const box = document.getElementById('groundedBox');
+  if (!box) return;
 
-window.setCallerPersona = function(personaKey) {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  document.querySelectorAll('.persona-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-persona') === personaKey);
-  });
-
-  const badge = document.getElementById('activePersonaBadge');
-  const labels = {
-    'FOUNDER_CEO': 'Founder / CEO',
-    'OPERATIONS_COO': 'COO / Ops (ERP/POS)',
-    'FINANCE_CFO': 'CFO (e-Invoice & Accounting)',
-    'REVOPS_CRM': 'RevOps (CRM/WhatsApp)',
-    'HR_PEOPLE': 'HR & People Ops',
-    'TECH_CIO_CTO': 'CIO/CTO (SLA & Cloud)',
-    'RETAIL_RESTAURANT_POS': 'Retail/Restaurant POS',
-    'MARKETING_GROWTH': 'VP Growth'
-  };
-  if (badge) badge.textContent = labels[personaKey] || 'Decision Maker';
-
-  const scriptBox = document.getElementById('callScriptBox');
-  if (!scriptBox) return;
-
-  const hook = lead.pitch_hook
-    || lead.odoo_playbook?.custom_pitch_hook
-    || lead.odoo_sales_playbook?.custom_pitch_hook
-    || '';
-  const archetype = lead.business_archetype || lead.industry || 'operations';
-  const name = lead.name || 'your company';
-
-  const scripts = {
-    'FOUNDER_CEO': hook 
-      ? `Hi, Big Binary Tech here. We help ${archetype} leadership modernize operations with unified Odoo workflows. ${hook} Does your team currently experience friction in manual intake, scheduling, or multi-system bookkeeping?`
-      : `Hi, Big Binary Tech here. We build custom Odoo operations platforms for ${name} that unify customer intake, job tracking, and automated billing into a single dashboard. Are disconnected software tools currently creating administrative overhead?`,
-    'OPERATIONS_COO': `Hi, Big Binary Tech here. We help ${archetype} operations teams eliminate spreadsheet disconnects and manual handoffs with custom Odoo job-dispatch, client portal, and inventory workflows. Are manual coordination bottlenecks slowing down fulfillment for ${name}?`,
-    'FINANCE_CFO': `Hi, Big Binary Tech here. We help finance leaders automate invoicing, multi-system reconciliation, and payment collections directly inside Odoo ERP. Would eliminating manual double-entry between intake and accounting save your team significant overhead each month?`,
-    'REVOPS_CRM': `Hi, Big Binary Tech here. We help ${archetype} teams bridge customer inquiries, CRM pipelines, and automated WhatsApp/SMS notifications directly into Odoo. Is lead drop-off or delayed follow-up currently costing ${name} sales opportunities?`,
-    'HR_PEOPLE': `Hi, Big Binary Tech here. We streamline employee onboarding, time-tracking, and payroll workflows into unified Odoo HR modules with zero double-entry. Are disparate HR and timesheet tools creating administrative drag?`,
-    'TECH_CIO_CTO': `Hi, Big Binary Tech here. We deliver turnkey Odoo ERP deployments and enterprise n8n workflow bridges with guaranteed uptime, direct API connectors, and zero vendor lock-in. Are legacy software silos or custom script maintenance consuming IT resources?`,
-    'RETAIL_RESTAURANT_POS': `Hi, Big Binary Tech here. We help retail and clinic locations sync multi-counter POS transactions, inventory, and accounting into a single real-time Odoo terminal. Would real-time stock sync and automated daily closing save your team hours?`,
-    'MARKETING_GROWTH': `Hi, Big Binary Tech here. We connect customer acquisition campaigns directly into Odoo CRM with automated lead routing and appointment booking. Would automated conversion workflows help ${name} scale faster?`
-  };
-
-  scriptBox.textContent = scripts[personaKey] || scripts['FOUNDER_CEO'];
-};
-
-window.copyCurrentPhone = function() {
-  const lead = callerLeads[currentIndex];
-  if (lead && lead.phone) {
-    navigator.clipboard.writeText(lead.phone);
-    showToast('📋 Phone copied!');
-  }
-};
-
-window.editCurrentPhone = function() {
-  const lead = callerLeads[currentIndex];
-  const editPhoneRow = document.getElementById('callEditPhoneRow');
-  if (editPhoneRow) {
-    editPhoneRow.style.display = 'block';
-    const input = document.getElementById('editPhoneInput');
-    if (input) {
-      input.value = (lead && lead.phone && lead.phone !== '(555) 000-0000') ? lead.phone : '';
-      input.focus();
-    }
-  }
-};
-
-function showToast(message, isSuccess = true) {
-  let toast = document.getElementById('callerToast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'callerToast';
-    toast.style.position = 'fixed';
-    toast.style.bottom = '24px';
-    toast.style.right = '24px';
-    toast.style.padding = '12px 20px';
-    toast.style.borderRadius = '8px';
-    toast.style.fontSize = '0.875rem';
-    toast.style.fontWeight = '600';
-    toast.style.color = '#ffffff';
-    toast.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
-    toast.style.zIndex = '9999';
-    toast.style.transition = 'all 0.3s ease';
-    document.body.appendChild(toast);
-  }
-  toast.style.background = isSuccess ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #f43f5e, #e11d48)';
-  toast.textContent = message;
-  toast.style.display = 'block';
-  toast.style.opacity = '1';
-  toast.style.transform = 'translateY(0)';
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(10px)';
-    setTimeout(() => { toast.style.display = 'none'; }, 300);
-  }, 2500);
-}
-
-let pendingOutcomeStatus = null;
-
-window.logOutcome = async function(status) {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const notes = document.getElementById('callNotesInput').value.trim();
-
-  if (status === 'Interested' || status === 'Callback Requested') {
-    pendingOutcomeStatus = status;
-    openFollowUpModal(status, notes);
+  const a = lead.grounded_analysis;
+  const btn = document.getElementById('groundedRunBtn');
+  if (btn && !btn.disabled) btn.textContent = a ? 'Re-run Analysis' : 'Run Gemini Analysis';
+  if (!a) {
+    box.innerHTML = `<div class="ga-idle">No analysis yet. Click <strong>Run Gemini Analysis</strong> to generate a company profile, an analysis of the lowest-rating reviews with sample snippets, and the Odoo modules to sell.</div>`;
     return;
   }
 
-  // Not a Fit or No Answer / Voicemail
+  const linkChip = (href, label) => href
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener" class="ga-chip">${label}</a>` : '';
+
+  const person = (p, roleFallback) => p && p.name ? `
+    <div class="ga-person">
+      <div class="ga-person-name">${esc(p.name)} <span class="ga-person-title">${esc(p.title || roleFallback || '')}</span></div>
+      <div class="ga-person-links">
+        ${p.email ? linkChip('mailto:' + p.email, esc(p.email)) : ''}
+        ${p.linkedin ? linkChip(p.linkedin, p.linkedin_is_search ? 'Find on LinkedIn' : 'LinkedIn') : ''}
+      </div>
+    </div>` : '';
+
+  const ra = a.review_analysis || {};
+  const problems = (ra.recurring_problems || []);
+  const snippets = (ra.snippets || []);
+  const mapping = (a.odoo_mapping || []);
+  const matrix = a.problem_matrix || null;
+  const hasContacts = (a.ceo && a.ceo.name) || (a.decision_makers || []).some(d => d && d.name);
+
+  const matrixRows = (matrix && matrix.rows || []).filter(r => r.count > 0);
+  const matrixHtml = matrixRows.length ? `
+    <div class="ga-section-label">Problem × Odoo Matrix · ${matrix.total_bad_reviews} bad reviews</div>
+    <table class="ga-matrix">
+      <thead><tr><th>Problem</th><th>Reviews</th><th>Share</th><th>Odoo module</th></tr></thead>
+      <tbody>
+        ${matrixRows.map((r, i) => `
+          <tr class="${i === 0 ? 'ga-matrix-top' : ''}">
+            <td>${esc(r.problem)}</td>
+            <td class="ga-matrix-num">${r.count}</td>
+            <td class="ga-matrix-num">${r.share_pct}%</td>
+            <td class="ga-matrix-mod">${esc(r.odoo_module || '—')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    ${matrixRows[0] && matrixRows[0].odoo_module ? `<div class="ga-lead-pitch">Lead with <strong>${esc(matrixRows[0].odoo_module)}</strong> — it fixes the #1 complaint (${matrixRows[0].share_pct}% of bad reviews).</div>` : ''}
+  ` : '';
+
+  box.innerHTML = `
+    ${a.company_profile ? `
+      <div class="ga-section-label">Company Profile</div>
+      <div class="ga-text">${esc(a.company_profile)}</div>` : ''}
+
+    ${hasContacts ? `
+      <div class="ga-section-label">Leadership (AI — verify)</div>
+      ${person(a.ceo, 'CEO')}
+      ${(a.decision_makers || []).map(dm => person(dm)).join('')}` : ''}
+
+    ${matrixHtml}
+
+    <div class="ga-section-label">Lowest-Rating Review Analysis${ra.reviews_analysed ? ` · ${ra.reviews_analysed} real reviews` : ''}</div>
+    ${ra.overall ? `<div class="ga-text">${esc(ra.overall)}</div>` : ''}
+    ${problems.length ? problems.map(p => `
+      <div class="ga-problem">
+        <div class="ga-problem-head">${esc(p.problem)}</div>
+        ${p.evidence ? `<div class="ga-evidence">${esc(p.evidence)}</div>` : ''}
+      </div>`).join('') : '<div class="ga-empty">No recurring complaints identified.</div>'}
+
+    ${snippets.length ? `
+      <div class="ga-section-label">Sample Bad-Review Snippets</div>
+      ${snippets.map(s => `
+        <div class="ga-snippet">
+          <span class="ga-snippet-star">${s.stars ? esc(s.stars) + '★' : ''}</span>
+          <span class="ga-snippet-text">“${esc((s.text || '').slice(0, 240))}”</span>
+        </div>`).join('')}` : ''}
+
+    <div class="ga-section-label">Odoo Modules to Sell</div>
+    ${mapping.length ? mapping.map(m => `
+      <div class="ga-map">
+        <div class="ga-map-top"><span class="ga-map-problem">${esc(m.problem)}</span><span class="ga-map-arrow">→</span><span class="ga-map-module">${esc(m.odoo_module)}</span></div>
+        ${m.pitch ? `<div class="ga-map-pitch">${esc(m.pitch)}</div>` : ''}
+      </div>`).join('') : '<div class="ga-empty">No Odoo mapping produced.</div>'}
+
+    <div class="ga-generated">AI briefing via Gemini · ${a.generated_at ? new Date(a.generated_at).toLocaleString() : ''}</div>
+  `;
+}
+
+// Trigger a Gemini analysis for the active lead.
+async function runGroundedAnalysis() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const btn = document.getElementById('groundedRunBtn');
+  const box = document.getElementById('groundedBox');
+  btn.disabled = true;
+  btn.textContent = 'Working…';
+  if (box) box.innerHTML = '<div class="ga-loading"><span class="ga-spinner"></span> Scraping the lowest-rating Google reviews, then Gemini analyses them &amp; maps to Odoo modules… (this can take ~30s)</div>';
+
   try {
-    const res = await fetch(`/api/leads/${lead.id}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes, follow_up_date: null })
-    });
+    const res = await fetch(`/api/leads/${lead.id || lead._id}/grounded-analysis`, { method: 'POST' });
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to save');
-
-    lead.call_status = status;
-    lead.notes = notes;
-    lead.follow_up_date = null;
-
-    if (status === 'Not a Fit') {
-      showToast(`❌ Marked "${lead.name}" as Not a Fit`);
-    } else {
-      showToast(`📵 Logged No Answer for "${lead.name}"`);
+    if (!res.ok) throw new Error(data.error || 'Analysis failed');
+    if (data.gemini_failed) {
+      // Gemini unavailable, but we scraped the reviews — show them, don't dead-end.
+      if (box) box.innerHTML = reviewsFallbackHtml(data.reviews || [], data.error, data.reviews_count);
+      return;
     }
-
-    setTimeout(() => {
-      navigateLead(1);
-    }, 350);
+    Object.assign(lead, data.lead || {});
+    lead.grounded_analysis = data.analysis;
+    renderGroundedAnalysis(lead);
+    renderScriptContent(); // talking points now reflect the analysed company data
+    renderObjections();    // objections now reflect current ERP + top complaint
   } catch (err) {
-    console.error('Failed to log outcome:', err);
-    showToast('Failed to save status', false);
+    if (box) box.innerHTML = `<div class="ga-error">Analysis failed: ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = lead.grounded_analysis ? 'Re-run Analysis' : 'Run Gemini Analysis';
   }
-};
+}
 
-window.openFollowUpModal = function(status, existingNotes = '') {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
+// When Gemini is unavailable, show the scraped bad reviews + the reason (no dead-end).
+function reviewsFallbackHtml(reviews, errorMsg, count) {
+  const isQuota = /429|quota/i.test(errorMsg || '');
+  const rows = (reviews || []).slice(0, 12).map(r => `
+    <div class="ga-snippet">
+      <span class="ga-snippet-star">${r.rating ? esc(r.rating) + '★' : ''}</span>
+      <span class="ga-snippet-text">“${esc((r.text || '').slice(0, 200))}”</span>
+    </div>`).join('');
+  return `
+    <div class="ga-error" style="margin-bottom:0.5rem;">
+      ${isQuota ? 'Gemini quota reached' : 'Gemini analysis unavailable'} — ${esc(errorMsg || 'unknown error')}
+    </div>
+    <div class="ga-section-label">Scraped ${count != null ? count : reviews.length} bad (1–2★) reviews (saved)</div>
+    <div class="ga-text" style="margin-bottom:0.5rem;">The reviews were captured and stored. Click <strong>Re-run</strong> once quota resets — the scrape won't repeat.</div>
+    ${rows || '<div class="ga-empty">No reviews captured for this business.</div>'}
+  `;
+}
 
-  const modalTitle = document.getElementById('followUpModalTitle');
-  if (modalTitle) {
-    modalTitle.textContent = status === 'Interested' 
-      ? '✅ Interested — Schedule Follow-Up Meeting' 
-      : '📅 Schedule Callback Requested';
+function selectPersona(personaKey) {
+  activePersona = personaKey;
+  
+  // Update Tab Styling
+  document.querySelectorAll('.persona-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.persona === personaKey);
+  });
+
+  document.getElementById('activePersonaBadge').textContent = `Target: ${personaKey}`;
+  
+  renderScriptContent();
+}
+
+function switchScriptTab(tabKey) {
+  activeScriptTab = tabKey;
+  
+  document.querySelectorAll('.script-tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (tabKey === 'talking_points') document.getElementById('tabTalkingPoints')?.classList.add('active');
+  if (tabKey === 'questions') document.getElementById('tabQuestions')?.classList.add('active');
+  if (tabKey === 'value_propos') document.getElementById('tabValuePropos')?.classList.add('active');
+  if (tabKey === 'prescription') document.getElementById('tabPrescription')?.classList.add('active');
+
+  renderScriptContent();
+}
+
+// Build company-specific script items from the grounded analysis (matrix + Odoo
+// mapping + review analysis). Returns [] when no analysis has been run.
+function companyScriptItems(lead, tab) {
+  const a = lead.grounded_analysis;
+  if (!a) return [];
+  const rows = ((a.problem_matrix && a.problem_matrix.rows) || []).filter(r => r.count > 0);
+  const mapping = a.odoo_mapping || [];
+  const ra = a.review_analysis || {};
+  const problems = rows.length ? rows : (ra.recurring_problems || []).map(p => ({ problem: p.problem }));
+  const out = [];
+
+  if (tab === 'talking_points') {
+    if (a.company_profile) out.push(`<span style="color:#93c5fd;">${esc(a.company_profile)}</span>`);
+    rows.slice(0, 4).forEach(r =>
+      out.push(`<strong style="color:#fca5a5;">${r.share_pct}% of bad reviews</strong> cite <strong>${esc(r.problem)}</strong> → position Odoo <strong style="color:#34d399;">${esc(r.odoo_module || '—')}</strong>.`));
+    if (!rows.length && ra.overall) out.push(esc(ra.overall));
+  } else if (tab === 'questions') {
+    problems.slice(0, 4).forEach(r =>
+      out.push(`Your customers repeatedly mention <strong>${esc(r.problem)}</strong> — how are you handling that today?`));
+  } else if (tab === 'value_propos') {
+    mapping.slice(0, 5).forEach(m =>
+      out.push(`<strong style="color:#34d399;">${esc(m.odoo_module)}</strong>: ${esc(m.pitch || '')}`));
+  } else if (tab === 'prescription') {
+    (rows.length ? rows : mapping).slice(0, 5).forEach((r, i) =>
+      out.push(`Step ${i + 1}: Deploy Odoo <strong style="color:#34d399;">${esc(r.odoo_module || '—')}</strong> to fix <strong>${esc(r.problem || '')}</strong>${r.share_pct ? ` (${r.share_pct}% of complaints)` : ''}.`));
   }
-  const modalComp = document.getElementById('followUpModalCompany');
-  if (modalComp) {
-    modalComp.textContent = `${lead.name} (${lead.phone || 'No direct phone'})`;
-  }
+  return out;
+}
 
-  // Default datetime to Tomorrow 10:00 AM
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(10, 0, 0, 0);
-  const localIso = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  const dateInput = document.getElementById('followUpDateTimeInput');
-  if (dateInput) dateInput.value = localIso;
+function renderScriptContent() {
+  const container = document.getElementById('scriptContentBox');
+  if (!container) return;
 
-  const notesInput = document.getElementById('followUpNotesInput');
-  if (notesInput) notesInput.value = existingNotes || lead.notes || '';
+  const lead = callerLeads[currentIndex] || {};
+  const playbook = PERSONA_PLAYBOOKS[activePersona] || PERSONA_PLAYBOOKS.CTO;
+  const personaItems = playbook[activeScriptTab] || playbook.talking_points;
+  const companyItems = companyScriptItems(lead, activeScriptTab);
+  const a = lead.grounded_analysis;
 
-  const modal = document.getElementById('followUpModal');
-  if (modal) modal.style.display = 'flex';
-};
+  let headerHtml = `
+    <div style="font-weight: 800; color: #3b82f6; margin-bottom: 0.5rem; font-size: 0.85rem;">
+      ${playbook.title} — ${playbook.focus}
+    </div>
+  `;
 
-window.closeFollowUpModal = function() {
-  const modal = document.getElementById('followUpModal');
-  if (modal) modal.style.display = 'none';
-  pendingOutcomeStatus = null;
-};
-
-window.setFollowUpPreset = function(daysAhead, hour) {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  d.setHours(hour, 0, 0, 0);
-  const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  const dateInput = document.getElementById('followUpDateTimeInput');
-  if (dateInput) dateInput.value = localIso;
-};
-
-window.confirmFollowUpSchedule = async function() {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const status = pendingOutcomeStatus || 'Interested';
-  const followUpIso = document.getElementById('followUpDateTimeInput')?.value;
-  const notes = (document.getElementById('followUpNotesInput')?.value || '').trim();
-
-  const followUpDate = followUpIso ? new Date(followUpIso).toISOString() : null;
-
-  try {
-    const res = await fetch(`/api/leads/${lead.id}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes, follow_up_date: followUpDate })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to save');
-
-    lead.call_status = status;
-    lead.notes = notes;
-    lead.follow_up_date = followUpDate;
-
-    closeFollowUpModal();
-
-    const formattedDate = followUpDate 
-      ? new Date(followUpDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : 'Saved';
-    showToast(`✅ "${lead.name}" scheduled for follow-up on ${formattedDate}!`);
-
-    setTimeout(() => {
-      navigateLead(1);
-    }, 400);
-  } catch (err) {
-    console.error('Failed to schedule follow up:', err);
-    showToast('Failed to schedule follow-up', false);
-  }
-};
-
-window.confirmSaveOutcomeWithoutSchedule = async function() {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const status = pendingOutcomeStatus || 'Interested';
-  const notes = (document.getElementById('followUpNotesInput')?.value || '').trim();
-
-  try {
-    const res = await fetch(`/api/leads/${lead.id}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, notes, follow_up_date: null })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to save');
-
-    lead.call_status = status;
-    lead.notes = notes;
-    lead.follow_up_date = null;
-
-    closeFollowUpModal();
-    showToast(`✓ Logged as "${status}" for "${lead.name}"`);
-
-    setTimeout(() => {
-      navigateLead(1);
-    }, 350);
-  } catch (err) {
-    console.error('Failed to save status:', err);
-    showToast('Failed to save status', false);
-  }
-};
-
-
-// ─── Manual Enrichment ────────────────────────────────────────────────────────
-
-window.toggleAddContact = function() {
-  const form = document.getElementById('addContactForm');
-  const isVisible = form.style.display !== 'none';
-  form.style.display = isVisible ? 'none' : 'block';
-  if (!isVisible) document.getElementById('newContactName').focus();
-};
-
-window.saveNewContact = async function() {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const name = document.getElementById('newContactName').value.trim();
-  if (!name) { showToast('Name is required', false); return; }
-
-  const title    = document.getElementById('newContactTitle').value.trim()    || 'Contact';
-  const email    = document.getElementById('newContactEmail').value.trim()    || null;
-  const linkedin = document.getElementById('newContactLinkedIn').value.trim() || null;
-
-  const newContact = { name, title, email_guess: email, linkedin_url: linkedin, source: 'manual' };
-  const updatedDMs = [...(lead.decision_makers || []), newContact];
-
-  try {
-    const res = await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision_makers: updatedDMs })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    lead.decision_makers = updatedDMs;
-    document.getElementById('newContactName').value  = '';
-    document.getElementById('newContactTitle').value = '';
-    document.getElementById('newContactEmail').value = '';
-    document.getElementById('newContactLinkedIn').value = '';
-    document.getElementById('addContactForm').style.display = 'none';
-    renderActiveLead();
-    showToast(`✓ ${name} added as a contact`);
-  } catch (err) {
-    showToast('Failed to save contact', false);
-  }
-};
-
-window.importClayCsv = async function(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.append('file', file);
-  input.value = '';
-
-  showToast('Importing Clay CSV…');
-  try {
-    const res = await fetch('/api/leads/import-clay-csv', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-    showToast(`✓ ${data.matched} contacts imported (${data.skipped} skipped)`);
-    // Refresh current lead card if it was affected
-    await loadCallerLeads(callerLeads[currentIndex]?.id);
-  } catch (err) {
-    showToast(`Import failed: ${err.message}`, false);
-  }
-};
-
-window.removeDecisionMaker = async function(idx) {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-  const updatedDMs = (lead.decision_makers || []).filter((_, i) => i !== idx);
-  try {
-    const res = await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision_makers: updatedDMs })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-    lead.decision_makers = updatedDMs;
-    renderActiveLead();
-    showToast('Contact removed');
-  } catch (err) {
-    showToast('Failed to remove contact', false);
-  }
-};
-
-window.saveEditedPhone = async function() {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const newPhone = document.getElementById('editPhoneInput').value.trim();
-  if (!newPhone) { showToast('Enter a phone number', false); return; }
-
-  try {
-    const res = await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: newPhone })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    lead.phone = newPhone;
-    document.getElementById('callEditPhoneRow').style.display = 'none';
-    renderActiveLead();
-    showToast(`✓ Phone updated to ${newPhone}`);
-  } catch (err) {
-    showToast('Failed to save phone', false);
-  }
-};
-
-function renderIntelDossier(lead) {
-  const section = document.getElementById('callIntelSection');
-  const grid = document.getElementById('callIntelGrid');
-  const newsRow = document.getElementById('callIntelNewsRow');
-  const yelpRow = document.getElementById('callIntelYelpRow');
-
-  const intel = lead.deep_intel;
-  if (!intel) { if (section) section.style.display = 'none'; return; }
-
-  const tiles = [];
-
-  // Company age
-  const bbbYears = intel.bbb?.years_in_business;
-  const corpDate = intel.corporation?.incorporation_date;
-  const bbbRating = intel.bbb?.bbb_rating;
-  const bbbAccredited = intel.bbb?.bbb_accredited;
-
-  if (bbbYears || corpDate) {
-    const age = bbbYears || (corpDate ? `Est. ${corpDate.substring(0, 4)}` : '');
-    const accTag = bbbAccredited ? ' · BBB Accredited ✓' : '';
-    const ratingTag = bbbRating ? ` · ${bbbRating}` : '';
-    tiles.push({ icon: '🏢', label: 'Company Age', value: `${age}${ratingTag}${accTag}` });
+  if (activeScriptTab === 'talking_points' && lead.battlecard?.elevator_opener) {
+    headerHtml += `
+      <div style="background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; padding: 0.6rem; border-radius: 4px; margin-bottom: 0.75rem; font-style: italic; color: #f1f5f9;">
+        "${esc(lead.battlecard.elevator_opener)}"
+      </div>
+    `;
   }
 
-  // Legal registration
-  const corp = intel.corporation;
-  if (corp?.legal_name) {
-    tiles.push({ icon: '📋', label: 'Legal Entity', value: `${corp.legal_name}${corp.jurisdiction ? ' · ' + corp.jurisdiction : ''}${corp.current_status ? ' · ' + corp.current_status : ''}` });
-  }
-
-  // Officers from OpenCorporates
-  if (corp?.officers?.length > 0) {
-    const officerList = corp.officers.map(o => `${o.name}${o.position ? ' (' + o.position + ')' : ''}`).join(', ');
-    tiles.push({ icon: '👔', label: 'Registered Officers', value: officerList });
-  }
-
-  // Yelp rating
-  if (intel.yelp?.yelp_rating) {
-    tiles.push({ icon: '⭐', label: 'Yelp Rating', value: `${intel.yelp.yelp_rating}★${intel.yelp.yelp_review_count ? ' · ' + intel.yelp.yelp_review_count + ' reviews' : ''}` });
-  }
-
-  // Hiring signals
-  const hiringSignals = intel.hiring?.hiring_signals || [];
-  const jobCount = intel.hiring?.total_openings || 0;
-  if (hiringSignals.length > 0) {
-    tiles.push({ icon: '💼', label: `Hiring Signal (${jobCount} open ${jobCount === 1 ? 'role' : 'roles'})`, value: hiringSignals.join(' · ') });
-  }
-
-  // BBB complaints
-  if (intel.bbb?.complaints_count != null) {
-    const count = intel.bbb.complaints_count;
-    tiles.push({ icon: count > 5 ? '⚠️' : '📝', label: 'BBB Complaints', value: count === 0 ? 'None on record' : `${count} complaint${count !== 1 ? 's' : ''} filed` });
-  }
-
-  if (tiles.length === 0) { if (section) section.style.display = 'none'; return; }
-
-  if (grid) grid.innerHTML = tiles.map(t => `
-    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; padding: 0.55rem 0.8rem;">
-      <div style="font-size: 0.68rem; color: #6ee7b7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem;">${t.icon} ${escapeHtml(t.label)}</div>
-      <div style="font-size: 0.8rem; color: #e2e8f0; line-height: 1.35;">${escapeHtml(t.value)}</div>
+  const nodes = (items, color) => items.map(item => `
+    <div class="script-timeline-item">
+      <div class="script-timeline-node"${color ? ` style="background:${color}"` : ''}></div>
+      <div>${item}</div>
     </div>
   `).join('');
 
-  // News headline
-  const headline = intel.news?.latest_headline;
-  const newsHeadlineEl = document.getElementById('callIntelNewsHeadline');
-  if (headline && newsHeadlineEl) {
-    newsHeadlineEl.textContent = ' ' + headline;
-    if (newsRow) newsRow.style.display = 'block';
+  let body = '';
+  if (companyItems.length) {
+    const reviewCount = (a.problem_matrix && a.problem_matrix.total_bad_reviews) || a.reviews_scraped || '';
+    body += `<div class="script-section-label" style="color:#34d399;">Tailored to ${esc(lead.name || 'this lead')}${reviewCount ? ` — from ${reviewCount} analyzed reviews` : ''}</div>`;
+    body += nodes(companyItems, '#34d399');
+    body += `<div class="script-section-label" style="color:#60a5fa; margin-top:0.6rem;">${esc(activePersona)} persona angle</div>`;
+    body += nodes(personaItems, '#3b82f6');
   } else {
-    if (newsRow) newsRow.style.display = 'none';
+    body += nodes(personaItems, '#3b82f6');
   }
 
-  // Yelp review voice
-  const snippets = intel.yelp?.yelp_review_snippets || [];
-  const yelpSnippetEl = document.getElementById('callIntelYelpSnippet');
-  if (snippets.length > 0 && yelpSnippetEl) {
-    yelpSnippetEl.textContent = ' "' + snippets[0].substring(0, 200) + (snippets[0].length > 200 ? '…' : '') + '"';
-    if (yelpRow) yelpRow.style.display = 'block';
-  } else {
-    if (yelpRow) yelpRow.style.display = 'none';
-  }
-
-  if (section) section.style.display = 'block';
+  container.innerHTML = headerHtml + body;
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/[&<>"']/g, function(m) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
-  });
+// Company-specific objections derived from the analysis / current tech stack.
+function companyObjections(lead) {
+  const a = lead.grounded_analysis;
+  const out = [];
+  const erpList = (a && a.current_erp) || (lead.warm_intel && lead.warm_intel.current_erp) || lead.tech_stack || [];
+  const erp = Array.isArray(erpList) ? erpList[0] : erpList;
+  if (erp) {
+    out.push({
+      id: 'erp_current', title: `Using ${erp}`, num: '★', company: true,
+      quote: `"We already use ${erp} and it works for us."`,
+      rebuttal: `"${erp} is solid for its niche, but it doesn't unify ${esc(lead.industry || 'your operations')} end-to-end. Odoo bridges into ${erp} without ripping it out, killing the double-entry between systems."`
+    });
+  }
+  const top = a && a.problem_matrix && (a.problem_matrix.rows || []).filter(r => r.count > 0)[0];
+  if (top) {
+    out.push({
+      id: 'reviews_downplay', title: 'Reviews Not a Concern', num: '★', company: true,
+      quote: `"Our reviews aren't really a problem."`,
+      rebuttal: `"${top.share_pct}% of your recent 1–2★ reviews specifically cite ${esc((top.problem || '').toLowerCase())} — Odoo ${esc(top.odoo_module || '')} is built to fix exactly that."`
+    });
+  }
+  return out;
 }
 
-// ─── Full Company & Pitch Editor Modal ───────────────────────────────────────
+const GENERIC_OBJECTIONS = [
+  { id: 'budget', title: 'Budget Constraints', num: '1', quote: '"We don\'t have budget for big IT software projects right now."', rebuttal: '"Our solution typically consolidates 3–4 separate tool subscriptions, paying for itself in under 60 days from admin labor savings alone."' },
+  { id: 'timing', title: 'Timing & Bandwidth', num: '2', quote: '"We\'re too busy to change software or migrate data right now."', rebuttal: '"That\'s exactly why our turnkey rollout handles 100% of data migration and staging in the background with zero day-to-day downtime."' },
+  { id: 'competitor', title: 'In-House / Existing Partner', num: '3', quote: '"We already have an IT guy / agency handling this."', rebuttal: '"We don\'t replace your team — we provide 24/7 SLA infrastructure support and turnkey modules at half of agency hourly rates."' },
+  { id: 'current_tool', title: 'QuickBooks / Happy As-Is', num: '4', quote: '"We use QuickBooks & Excel and it works fine for us."', rebuttal: '"QuickBooks is great for accounting, but it creates manual double-entry for live field jobs and dispatch. We bridge directly into QuickBooks seamlessly."' }
+];
 
-window.openEditModal = function() {
+function renderObjections() {
+  const container = document.getElementById('objectionStack');
+  if (!container) return;
+  const lead = callerLeads[currentIndex] || {};
+  const tallies = lead.objection_tallies || {};
+  const objections = [...companyObjections(lead), ...GENERIC_OBJECTIONS];
+
+  container.innerHTML = objections.map(obj => `
+    <div class="objection-card"${obj.company ? ' style="border-left:2px solid #34d399;"' : ''}>
+      <div class="objection-header">
+        <div class="objection-title">
+          <span>${obj.title}</span>
+          <span style="font-size: 0.68rem; color: ${obj.company ? '#34d399' : '#6366f1'};">[${obj.num}]</span>
+        </div>
+        <div class="objection-tally-pill" onclick="incrementTally('${obj.id}')" title="Click to log occurrence (saved)">
+          Tally: <span id="tally_${obj.id}">${tallies[obj.id] || 0}</span>
+        </div>
+      </div>
+      <div class="objection-quote">${obj.quote}</div>
+      <div class="objection-rebuttal">${obj.rebuttal}</div>
+    </div>
+  `).join('');
+}
+
+function incrementTally(id) {
   const lead = callerLeads[currentIndex];
   if (!lead) return;
+  lead.objection_tallies = lead.objection_tallies || {};
+  lead.objection_tallies[id] = (lead.objection_tallies[id] || 0) + 1;
+  const el = document.getElementById(`tally_${id}`);
+  if (el) el.textContent = lead.objection_tallies[id];
+  // Persist (debounced so rapid clicks batch into one save)
+  clearTimeout(_tallySaveTimer);
+  _tallySaveTimer = setTimeout(() => {
+    fetch(`/api/leads/${lead.id || lead._id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ objection_tallies: lead.objection_tallies })
+    }).catch(err => console.error('Failed to save tally:', err));
+  }, 600);
+}
 
-  // Profile Tab
-  document.getElementById('editName').value = lead.name || '';
-  document.getElementById('editWebsite').value = lead.website || '';
-  document.getElementById('editPhone').value = lead.phone || '';
-  document.getElementById('editEmail').value = lead.email || '';
-  document.getElementById('editAddress').value = lead.address || lead.location || '';
-  document.getElementById('editIndustry').value = lead.industry || '';
-  document.getElementById('editSize').value = lead.employee_size || '';
+function navigateLead(dir) {
+  if (callerLeads.length === 0) return;
+  currentIndex += dir;
+  if (currentIndex < 0) currentIndex = callerLeads.length - 1;
+  if (currentIndex >= callerLeads.length) currentIndex = 0;
+  renderActiveLead();
+}
 
-  // Decision Makers Tab
-  const dms = lead.decision_makers || [];
-  const contactsContainer = document.getElementById('modalContactsList');
-  contactsContainer.innerHTML = '';
-  if (dms.length > 0) {
-    dms.forEach((dm, idx) => addModalContactRow(dm, idx));
-  } else {
-    addModalContactRow();
-  }
-
-  // Social Media Tab
-  const social = lead.social_media || {};
-  document.getElementById('editSocialLinkedIn').value = social.linkedin || '';
-  document.getElementById('editSocialTwitter').value = social.twitter || '';
-  document.getElementById('editSocialFacebook').value = social.facebook || '';
-  document.getElementById('editSocialInstagram').value = social.instagram || '';
-
-  // Pitch Tab
-  const bc = lead.battlecard || {};
-  document.getElementById('editPitchHook').value = bc.elevator_pitch || (lead.pitch_script ? lead.pitch_script.opening : '');
-  document.getElementById('editPitchAngle').value = bc.big_binary_angle || (lead.pitch_script ? lead.pitch_script.big_binary_advantage : '');
-  
-  const painPoints = bc.pain_points || (lead.pitch_script && lead.pitch_script.key_pain_points) || [];
-  document.getElementById('editPitchPainPoints').value = Array.isArray(painPoints) ? painPoints.join('\n') : String(painPoints || '');
-
-  const objections = bc.objection_responses || {};
-  let objText = '';
-  if (typeof objections === 'object') {
-    objText = Object.entries(objections).map(([k, v]) => `${k}: ${v}`).join('\n\n');
-  } else {
-    objText = String(objections || '');
-  }
-  document.getElementById('editPitchObjections').value = objText;
-
-  switchEditTab('profile');
-  document.getElementById('companyEditModal').style.display = 'flex';
-};
-
-window.closeEditModal = function() {
-  document.getElementById('companyEditModal').style.display = 'none';
-};
-
-window.switchEditTab = function(tabName) {
-  const tabs = ['profile', 'contacts', 'social', 'pitch'];
-  tabs.forEach(t => {
-    const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    const content = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    if (btn) {
-      if (t === tabName) {
-        btn.className = 'btn btn-sm btn-accent';
-      } else {
-        btn.className = 'btn btn-sm btn-secondary';
-      }
-    }
-    if (content) {
-      content.style.display = t === tabName ? 'block' : 'none';
-    }
-  });
-};
-
-window.addModalContactRow = function(contact = {}, idx = null) {
-  const container = document.getElementById('modalContactsList');
-  const rowId = `dm_row_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const row = document.createElement('div');
-  row.id = rowId;
-  row.className = 'modal-contact-row';
-  row.style = 'background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem; display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto; gap: 0.5rem; align-items: center;';
-
-  row.innerHTML = `
-    <input type="text" placeholder="Full Name *" value="${escapeHtml(contact.name || '')}" class="form-control form-control-sm dm-name" style="font-size: 0.78rem; padding: 0.35rem 0.5rem;" required>
-    <input type="text" placeholder="Title / Role" value="${escapeHtml(contact.title || '')}" class="form-control form-control-sm dm-title" style="font-size: 0.78rem; padding: 0.35rem 0.5rem;">
-    <input type="text" placeholder="Email" value="${escapeHtml(contact.email_guess || contact.email || '')}" class="form-control form-control-sm dm-email" style="font-size: 0.78rem; padding: 0.35rem 0.5rem;">
-    <input type="text" placeholder="LinkedIn URL" value="${escapeHtml(contact.linkedin_url || '')}" class="form-control form-control-sm dm-linkedin" style="font-size: 0.78rem; padding: 0.35rem 0.5rem;">
-    <button type="button" onclick="document.getElementById('${rowId}').remove()" class="btn btn-secondary btn-sm" style="color: #fb7185; padding: 0.35rem 0.6rem;" title="Remove contact">🗑️</button>
-  `;
-  container.appendChild(row);
-};
-
-window.saveCompanyEdits = async function() {
+function dialActiveLead() {
   const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const name = document.getElementById('editName').value.trim();
-  if (!name) {
-    showToast('Company Name is required', false);
-    switchEditTab('profile');
+  const number = lead ? primaryPhone(lead) : '';
+  if (!number) {
+    alert('No direct phone number found for this lead.');
     return;
   }
+  window.location.href = `tel:${number.replace(/[^0-9+]/g, '')}`;
+}
 
-  // Gather Contacts
-  const contactRows = document.querySelectorAll('#modalContactsList .modal-contact-row');
-  const dms = [];
-  contactRows.forEach(r => {
-    const cName = r.querySelector('.dm-name').value.trim();
-    if (cName) {
-      dms.push({
-        name: cName,
-        title: r.querySelector('.dm-title').value.trim() || 'Executive',
-        email_guess: r.querySelector('.dm-email').value.trim() || null,
-        linkedin_url: r.querySelector('.dm-linkedin').value.trim() || null,
-        source: 'manual_edit'
-      });
-    }
-  });
+function openOutcomeModal() {
+  document.getElementById('outcomeModal').style.display = 'flex';
+}
+function closeOutcomeModal() {
+  document.getElementById('outcomeModal').style.display = 'none';
+}
 
-  // Gather Social Media
-  const social = {
-    linkedin: document.getElementById('editSocialLinkedIn').value.trim() || null,
-    twitter: document.getElementById('editSocialTwitter').value.trim() || null,
-    facebook: document.getElementById('editSocialFacebook').value.trim() || null,
-    instagram: document.getElementById('editSocialInstagram').value.trim() || null
-  };
+async function logOutcome(outcome) {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
 
-  // Gather Pitch & Battlecard
-  const painPointsRaw = document.getElementById('editPitchPainPoints').value.split('\n').map(s => s.trim()).filter(Boolean);
-  const updatedBattlecard = {
-    ...(lead.battlecard || {}),
-    elevator_pitch: document.getElementById('editPitchHook').value.trim(),
-    big_binary_angle: document.getElementById('editPitchAngle').value.trim(),
-    pain_points: painPointsRaw,
-    custom_objections: document.getElementById('editPitchObjections').value.trim()
-  };
+  const noteEl = document.getElementById('outcomeNote');
+  const followEl = document.getElementById('outcomeFollowUp');
+  const notes = noteEl ? noteEl.value.trim() : '';
+  const follow_up_date = followEl && followEl.value ? followEl.value : null;
 
-  const payload = {
-    name,
-    website: document.getElementById('editWebsite').value.trim() || '',
-    phone: document.getElementById('editPhone').value.trim() || '',
-    email: document.getElementById('editEmail').value.trim() || '',
-    address: document.getElementById('editAddress').value.trim() || '',
-    industry: document.getElementById('editIndustry').value.trim() || lead.industry,
-    employee_size: document.getElementById('editSize').value.trim() || lead.employee_size,
-    decision_makers: dms,
-    social_media: social,
-    battlecard: updatedBattlecard
-  };
-
+  closeOutcomeModal();
   try {
-    const res = await fetch(`/api/leads/${lead.id}`, {
+    const res = await fetch(`/api/leads/${lead.id || lead._id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: outcome, notes, follow_up_date })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.lead) {
+      lead.call_status = data.lead.call_status;
+      lead.notes = data.lead.notes;
+      lead.follow_up_date = data.lead.follow_up_date;
+    } else {
+      lead.call_status = outcome; // optimistic fallback
+    }
+  } catch (err) {
+    console.error('Failed to log status:', err);
+    lead.call_status = outcome;
+  } finally {
+    if (noteEl) noteEl.value = '';
+    if (followEl) followEl.value = '';
+    navigateLead(1);
+  }
+}
+
+// Call Stopwatch Timer
+function tickCallTimer() {
+  callSeconds++;
+  const mins = Math.floor(callSeconds / 60).toString().padStart(2, '0');
+  const secs = (callSeconds % 60).toString().padStart(2, '0');
+  const el = document.getElementById('callDurationTimer');
+  if (el) el.textContent = `${mins}:${secs}`;
+}
+
+// Resume ticking without resetting the elapsed time (used by the Hold button)
+function resumeCallTimer() {
+  if (callTimerInterval) clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(tickCallTimer, 1000);
+}
+
+// Start a fresh call: clears any Hold state and runs the stopwatch
+function startCallTimer() {
+  isOnHold = false;
+  const hb = document.getElementById('holdBtn');
+  if (hb) { hb.classList.remove('active'); hb.innerHTML = ICONS.pause; hb.title = 'Hold Call'; }
+  resumeCallTimer();
+}
+
+// ── Multiple phone numbers (edit modal) ──────────────────────────────────────
+function phoneRowHtml(label, number) {
+  return `<div class="edit-phone-row">
+      <input type="text" class="form-control" data-phone="label" placeholder="Label (Main, Store, Mobile…)" value="${esc(label || '')}">
+      <input type="text" class="form-control" data-phone="number" placeholder="Phone number" value="${esc(number || '')}">
+      <button type="button" class="edit-row-del" onclick="this.closest('.edit-phone-row').remove()" title="Remove number">✕</button>
+    </div>`;
+}
+function addPhoneRow(label = '', number = '') {
+  const c = document.getElementById('editPhonesContainer');
+  if (c) c.insertAdjacentHTML('beforeend', phoneRowHtml(label, number));
+}
+
+// ── Add Person modal (quick decision-maker capture) ──────────────────────────
+function openAddPersonModal() {
+  ['addPersonName', 'addPersonTitle', 'addPersonLinkedin', 'addPersonPhone', 'addPersonEmail']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const m = document.getElementById('addPersonModal');
+  if (m) m.style.display = 'flex';
+}
+function closeAddPersonModal() {
+  const m = document.getElementById('addPersonModal');
+  if (m) m.style.display = 'none';
+}
+async function saveNewPerson(e) {
+  e.preventDefault();
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const name = v('addPersonName');
+  if (!name) { alert('Name is required.'); return; }
+  const person = {
+    name,
+    title: v('addPersonTitle') || 'Decision Maker',
+    cell: v('addPersonPhone') || null,
+    email_guess: v('addPersonEmail') || null,
+    linkedin_url: v('addPersonLinkedin') || null,
+    source: 'manual', verified: true
+  };
+  const updated = [...(lead.decision_makers || []), person];
+  const btn = document.getElementById('addPersonSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await fetch(`/api/leads/${lead.id || lead._id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision_makers: updated })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    // Trust the persisted record; only then reflect it in memory + UI.
+    if (data.lead) Object.assign(lead, data.lead); else lead.decision_makers = updated;
+    closeAddPersonModal();
+    renderActiveLead();
+  } catch (err) {
+    alert('NOT saved — server error: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Person'; }
+  }
+}
+
+// ── Human-editable Grounded Analysis ─────────────────────────────────────────
+// Pull the latest lead record from the server (Clay sync writes to Mongo → we read it).
+function pullFromClay() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const btn = document.getElementById('gaClayPullBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Pulling…'; }
+  fetch(`/api/leads/${lead.id || lead._id}`)
+    .then(r => r.json())
+    .then(data => {
+      const fresh = (data && data.lead) || data;
+      if (fresh && (fresh.id || fresh._id)) { Object.assign(lead, fresh); renderActiveLead(); }
+      if (btn) { btn.textContent = 'Pulled ✓'; setTimeout(() => { btn.textContent = 'Pull from Clay'; btn.disabled = false; }, 1400); }
+    })
+    .catch(err => {
+      alert('Pull failed: ' + err.message);
+      if (btn) { btn.textContent = 'Pull from Clay'; btn.disabled = false; }
+    });
+}
+
+// Dispatch this lead to the Clay waterfall (async; results return via /api/leads/sync).
+function runAnalysisClayEnrich() {
+  pushCallerLeadToClay();
+}
+
+// Turn the analysis panel into an editable form (human data entry, not just AI).
+function openAnalysisEditor() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const a = lead.grounded_analysis || {};
+  const ra = a.review_analysis || {};
+  const probs = ra.recurring_problems || [];
+  const maps = a.odoo_mapping || [];
+  const snips = ra.snippets || [];
+  const box = document.getElementById('groundedBox');
+  if (!box) return;
+
+  const probRow = (p = {}) => `
+    <div class="ga-edit-row" data-ga="problem">
+      <input class="form-control" data-k="problem" placeholder="Problem" value="${esc(p.problem || '')}">
+      <input class="form-control" data-k="keywords" placeholder="Keywords for matrix (comma-separated)" value="${esc((p.keywords || []).join(', '))}">
+      <textarea class="form-control" data-k="evidence" rows="2" placeholder="Evidence / quote">${esc(p.evidence || '')}</textarea>
+      <button type="button" class="ga-row-del" onclick="this.closest('.ga-edit-row').remove()" title="Remove">✕</button>
+    </div>`;
+  const mapRow = (m = {}) => `
+    <div class="ga-edit-row" data-ga="mapping">
+      <input class="form-control" data-k="problem" placeholder="Problem" value="${esc(m.problem || '')}">
+      <input class="form-control" data-k="odoo_module" placeholder="Odoo module" value="${esc(m.odoo_module || '')}">
+      <textarea class="form-control" data-k="pitch" rows="2" placeholder="Pitch">${esc(m.pitch || '')}</textarea>
+      <button type="button" class="ga-row-del" onclick="this.closest('.ga-edit-row').remove()" title="Remove">✕</button>
+    </div>`;
+  const snipRow = (s = {}) => `
+    <div class="ga-edit-row ga-edit-row-snippet" data-ga="snippet">
+      <input class="form-control ga-star-input" data-k="stars" placeholder="★" value="${esc(s.stars || '')}">
+      <textarea class="form-control" data-k="text" rows="2" placeholder="Review snippet">${esc(s.text || '')}</textarea>
+      <button type="button" class="ga-row-del" onclick="this.closest('.ga-edit-row').remove()" title="Remove">✕</button>
+    </div>`;
+
+  box.innerHTML = `
+    <div class="ga-editor">
+      <div class="ga-editor-hint">Human data entry — edit or add anything below, then Save. The Problem × Odoo matrix, talking points and objections recompute from what you enter.</div>
+
+      <div class="ga-section-label">Company Profile</div>
+      <textarea id="gaCompanyProfile" class="form-control" rows="3" placeholder="What the company does, size, positioning…">${esc(a.company_profile || '')}</textarea>
+
+      <div class="ga-section-label">Overall Review Summary</div>
+      <textarea id="gaOverall" class="form-control" rows="3" placeholder="Summary of the lowest-rating reviews…">${esc(ra.overall || '')}</textarea>
+
+      <div class="ga-section-label ga-editor-head"><span>Recurring Problems</span><button type="button" class="btn btn-secondary btn-sm" onclick="gaAddRow('problem')">+ Add</button></div>
+      <div id="gaProblems">${(probs.length ? probs.map(probRow).join('') : probRow())}</div>
+
+      <div class="ga-section-label ga-editor-head"><span>Odoo Mapping</span><button type="button" class="btn btn-secondary btn-sm" onclick="gaAddRow('mapping')">+ Add</button></div>
+      <div id="gaMappings">${(maps.length ? maps.map(mapRow).join('') : mapRow())}</div>
+
+      <div class="ga-section-label ga-editor-head"><span>Bad-Review Snippets</span><button type="button" class="btn btn-secondary btn-sm" onclick="gaAddRow('snippet')">+ Add</button></div>
+      <div id="gaSnippets">${snips.map(snipRow).join('')}</div>
+
+      <div class="ga-editor-actions">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="renderGroundedAnalysis(callerLeads[currentIndex])">Cancel</button>
+        <button type="button" id="gaSaveBtn" class="btn btn-primary btn-sm" onclick="saveAnalysis()">Save Analysis</button>
+      </div>
+    </div>`;
+  box._gaTemplates = { problem: probRow, mapping: mapRow, snippet: snipRow };
+}
+
+function gaAddRow(kind) {
+  const box = document.getElementById('groundedBox');
+  const contId = { problem: 'gaProblems', mapping: 'gaMappings', snippet: 'gaSnippets' }[kind];
+  const cont = document.getElementById(contId);
+  if (cont && box && box._gaTemplates) cont.insertAdjacentHTML('beforeend', box._gaTemplates[kind]());
+}
+
+async function saveAnalysis() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const gv = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const collect = (contId, keys) => {
+    const out = [];
+    document.querySelectorAll(`#${contId} .ga-edit-row`).forEach(row => {
+      const obj = {};
+      keys.forEach(k => { const el = row.querySelector(`[data-k="${k}"]`); obj[k] = el ? el.value.trim() : ''; });
+      out.push(obj);
+    });
+    return out;
+  };
+  const problems = collect('gaProblems', ['problem', 'keywords', 'evidence'])
+    .filter(p => p.problem)
+    .map(p => ({ problem: p.problem, keywords: p.keywords ? p.keywords.split(',').map(s => s.trim()).filter(Boolean) : [], evidence: p.evidence }));
+  const mapping = collect('gaMappings', ['problem', 'odoo_module', 'pitch']).filter(m => m.problem || m.odoo_module);
+  const snippets = collect('gaSnippets', ['stars', 'text']).filter(s => s.text).map(s => ({ stars: s.stars, text: s.text }));
+
+  const base = lead.grounded_analysis || {};
+  const analysis = {
+    ...base,
+    company_profile: gv('gaCompanyProfile'),
+    review_analysis: { ...(base.review_analysis || {}), overall: gv('gaOverall'), recurring_problems: problems, snippets },
+    odoo_mapping: mapping,
+    edited_by_human: true
+  };
+
+  const btn = document.getElementById('gaSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await fetch(`/api/leads/${lead.id || lead._id}/analysis`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (data.lead) Object.assign(lead, data.lead);
+    lead.grounded_analysis = data.analysis || analysis;
+    renderGroundedAnalysis(lead);
+    renderScriptContent(); // talking points reflect the edited analysis
+    renderObjections();    // objections reflect the edited top complaint
+  } catch (err) {
+    alert('NOT saved — server error: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Analysis'; }
+  }
+}
+
+// Edit Lead Modal
+function openEditModal() {
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
+  set('editLeadName', lead.name);
+  set('editLeadWebsite', cleanWebsite(lead.website));
+  set('editLeadEmail', lead.email);
+  set('editLeadLinkedin', lead.linkedin);
+  set('editLeadOpener', lead.battlecard && lead.battlecard.elevator_opener);
+  // Company details — all pre-filled from whatever data exists
+  set('editLeadIndustry', lead.industry);
+  set('editLeadEmployees', lead.employee_size);
+  set('editLeadScore', lead.success_chance_pct);
+  set('editLeadAddress', lead.address);
+  set('editLeadCategory', lead.category || 'NEW_IMPLEMENTATION');
+  set('editLeadCallStatus', lead.call_status || 'Uncalled');
+  set('editLeadFollowUp', lead.follow_up_date ? String(lead.follow_up_date).slice(0, 10) : '');
+  set('editLeadTech', Array.isArray(lead.tech_stack) ? lead.tech_stack.join(', ') : (lead.tech_stack || ''));
+  set('editLeadNotes', lead.notes);
+
+  // Build editable phone rows (one per business number; at least one blank row)
+  const phones = getLeadPhones(lead);
+  const pc = document.getElementById('editPhonesContainer');
+  if (pc) {
+    pc.innerHTML = '';
+    if (phones.length) phones.forEach(p => addPhoneRow(p.label, p.number));
+    else addPhoneRow('Main', '');
+  }
+
+  // Build editable rows for ALL decision makers (at least one blank row)
+  const dms = lead.decision_makers || [];
+  const container = document.getElementById('editDmContainer');
+  let rows = '';
+  const dmCount = Math.max(dms.length, 1);
+  for (let i = 0; i < dmCount; i++) {
+    const dm = dms[i] || {};
+    rows += `
+      <div class="edit-dm-row" data-dm-index="${i}">
+        <div class="edit-dm-row-head">Decision Maker ${i + 1}</div>
+        <div class="edit-dm-grid">
+          <input type="text" class="form-control" data-dm="name" placeholder="Full name" value="${esc(dm.name || '')}">
+          <input type="text" class="form-control" data-dm="title" placeholder="Title (e.g. CEO, COO, Founder)" value="${esc(dm.title || '')}">
+          <input type="text" class="form-control" data-dm="cell" placeholder="Direct cell / mobile" value="${esc(dm.cell || '')}">
+          <input type="text" class="form-control" data-dm="email_guess" placeholder="Email" value="${esc(dm.email_guess || '')}">
+          <input type="text" class="form-control" data-dm="linkedin_url" placeholder="LinkedIn URL" value="${esc(dm.linkedin_url || '')}" style="grid-column: 1 / -1;">
+        </div>
+      </div>`;
+  }
+  container.innerHTML = rows;
+
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+async function saveEditedLead(e) {
+  e.preventDefault();
+  const lead = callerLeads[currentIndex];
+  if (!lead) return;
+
+  const val = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  lead.name = val('editLeadName');
+  // Collect all business phone numbers; the first is the primary (kept in lead.phone).
+  const phones = [];
+  document.querySelectorAll('#editPhonesContainer .edit-phone-row').forEach(row => {
+    const number = row.querySelector('[data-phone="number"]').value.trim();
+    if (!number) return;
+    const label = row.querySelector('[data-phone="label"]').value.trim() || 'Main';
+    phones.push({ label, number });
+  });
+  lead.phones = phones;
+  lead.phone = phones.length ? phones[0].number : '';
+  lead.website = cleanWebsite(val('editLeadWebsite'));
+  lead.email = val('editLeadEmail');
+  lead.linkedin = val('editLeadLinkedin');
+  lead.industry = val('editLeadIndustry');
+  lead.employee_size = val('editLeadEmployees');
+  const scoreRaw = val('editLeadScore');
+  if (scoreRaw !== '') lead.success_chance_pct = Math.max(0, Math.min(100, parseInt(scoreRaw, 10) || 0));
+  lead.address = val('editLeadAddress');
+  lead.category = val('editLeadCategory') || lead.category;
+  lead.follow_up_date = val('editLeadFollowUp') || null;
+  lead.tech_stack = val('editLeadTech') ? val('editLeadTech').split(',').map(s => s.trim()).filter(Boolean) : [];
+  lead.notes = document.getElementById('editLeadNotes').value; // full editable notes/history
+  if (!lead.battlecard) lead.battlecard = {};
+  lead.battlecard.elevator_opener = document.getElementById('editLeadOpener').value;
+
+  // Merge decision-maker edits, preserving any existing extra fields (persona, etc.)
+  const existing = lead.decision_makers || [];
+  const merged = [];
+  document.querySelectorAll('#editDmContainer .edit-dm-row').forEach((row, i) => {
+    const get = (k) => row.querySelector(`[data-dm="${k}"]`).value.trim();
+    const name = get('name');
+    if (!name) return; // skip empty slots
+    merged.push({
+      ...(existing[i] || {}),
+      name,
+      title: get('title'),
+      cell: get('cell'),
+      email_guess: get('email_guess'),
+      linkedin_url: get('linkedin_url')
+    });
+  });
+  // Rows now cover every decision maker (dynamic), so the merged list is complete.
+  lead.decision_makers = merged;
+
+  const saveBtn = document.getElementById('editSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  try {
+    const res = await fetch(`/api/leads/${lead.id || lead._id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        name: lead.name, phone: lead.phone, phones: lead.phones, website: lead.website,
+        email: lead.email, linkedin: lead.linkedin,
+        industry: lead.industry, employee_size: lead.employee_size,
+        success_chance_pct: lead.success_chance_pct, address: lead.address,
+        category: lead.category, follow_up_date: lead.follow_up_date,
+        tech_stack: lead.tech_stack, notes: lead.notes,
+        battlecard: lead.battlecard, decision_makers: lead.decision_makers
+      })
     });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to update');
-
-    // Update local object & re-render
-    Object.assign(lead, payload);
-    if (data.lead) Object.assign(lead, data.lead);
-
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (data.lead) Object.assign(lead, data.lead); // trust the persisted record
     closeEditModal();
     renderActiveLead();
-    showToast(`✓ "${name}" details & pitch saved successfully!`);
   } catch (err) {
-    console.error('Error saving company edits:', err);
-    showToast(`Failed to save changes: ${err.message}`, false);
-  }
-};
-
-window.runCallerAiEnrich = async function() {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const btn = document.getElementById('callerAiEnrichBtn');
-  const originalText = btn.innerHTML;
-  btn.innerHTML = '⏳ AI Researching...';
-  btn.disabled = true;
-
-  try {
-    const res = await fetch(`/api/leads/${lead.id}/ai-enrich`, { method: 'POST' });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'AI Enrichment failed');
-
-    // Update lead in memory
-    Object.assign(lead, data.lead);
-    renderActiveLead();
-    showToast(`✨ Enriched "${lead.name}" with verified AI research!`);
-  } catch (err) {
-    showToast(`AI Enrichment error: ${err.message}`, false);
+    console.error('Failed to persist lead edits:', err);
+    // Do NOT close the modal or claim success — the edit is not saved.
+    alert('NOT saved — server error: ' + err.message + '\nYour edits are still in the form; try again.');
   } finally {
-    btn.innerHTML = originalText;
-    btn.disabled = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
   }
-};
+}
 
-window._latestLiveAuditResult = null;
-
-window.runCallerLiveAudit = async function() {
+async function saveQuickNote() {
+  const input = document.getElementById('callerQuickNoteInput');
   const lead = callerLeads[currentIndex];
-  if (!lead) return;
-
-  const btn = document.getElementById('callerLiveAuditBtn');
-  const originalText = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.innerHTML = '⏳ Auditing Tech & Reviews...';
-    btn.disabled = true;
-  }
-
+  if (!input || !input.value.trim() || !lead) return;
+  const text = input.value.trim();
+  const btn = document.querySelector('[onclick="saveQuickNote()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    const res = await fetch(`/api/leads/${lead.id}/live-audit`, { method: 'POST' });
+    const res = await fetch(`/api/leads/${lead.id || lead._id}/note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Live audit failed');
-
-    window._latestLiveAuditResult = data.lead;
-    window._latestNewFindings = data.new_findings || [];
-    openLiveAuditModal(data.lead, data.new_findings || []);
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+    lead.notes = (data.lead && data.lead.notes) || lead.notes; // keep memory in sync
+    input.value = '';
+    if (btn) { btn.textContent = 'Saved ✓'; setTimeout(() => { btn.textContent = 'Send'; btn.disabled = false; }, 1200); }
   } catch (err) {
-    showToast(`Live Audit error: ${err.message}`, false);
-  } finally {
-    if (btn) {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
+    if (btn) { btn.textContent = 'Send'; btn.disabled = false; }
+    alert('Failed to save note: ' + err.message);
   }
+}
+
+let isMuted = false;
+let isOnHold = false;
+
+// Monochrome inline SVG icons for the call-control buttons (corporate, no emoji)
+const ICONS = {
+  mic: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>',
+  micMuted: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
+  pause: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>',
+  play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19,12 8,19"/></svg>'
 };
 
-window.openLiveAuditModal = function(auditedLead, newFindings) {
-  if (!auditedLead) return;
+function initCallControlIcons() {
+  const mute = document.getElementById('muteBtn');
+  const hold = document.getElementById('holdBtn');
+  if (mute) mute.innerHTML = isMuted ? ICONS.micMuted : ICONS.mic;
+  if (hold) hold.innerHTML = isOnHold ? ICONS.play : ICONS.pause;
+}
 
-  document.getElementById('auditModalTitle').textContent = `⚡ Live Web Tech Audit: ${auditedLead.name}`;
-  document.getElementById('auditModalSubtitle').textContent = `Scan complete for ${auditedLead.website || auditedLead.name}`;
+function toggleMute() {
+  const btn = document.getElementById('muteBtn');
+  if (!btn) return;
+  isMuted = !isMuted;
+  btn.classList.toggle('active', isMuted);
+  btn.innerHTML = isMuted ? ICONS.micMuted : ICONS.mic;
+  btn.title = isMuted ? 'Unmute Audio' : 'Mute Audio';
+}
 
-  // 1. Tech Metrics panel — website health snapshot
-  const techContainer = document.getElementById('auditTechMetrics');
-  const ta = auditedLead.tech_audit || {};
+function toggleHold() {
+  const btn = document.getElementById('holdBtn');
+  if (!btn) return;
+  isOnHold = !isOnHold;
+  btn.classList.toggle('active', isOnHold);
 
-  const sslBadge = auditedLead.has_ssl
-    ? '<span style="color:#34d399;font-weight:700;">✅ SSL Valid</span>'
-    : '<span style="color:#f43f5e;font-weight:700;">🚨 No SSL</span>';
-
-  const loadSec = auditedLead.load_time_sec ? `${auditedLead.load_time_sec}s` : '—';
-  const loadColor = parseFloat(auditedLead.load_time_sec) > 3 ? '#f43f5e' : '#34d399';
-
-  const ttfb = ta.performance?.ttfb_ms ? `${ta.performance.ttfb_ms}ms TTFB` : '';
-  const lcp  = ta.performance?.lcp_ms  ? `${(ta.performance.lcp_ms/1000).toFixed(1)}s LCP` : '';
-
-  const copyYear = auditedLead.copyright_year || '—';
-  const copyAge  = copyYear !== '—' ? new Date().getFullYear() - parseInt(copyYear) : null;
-  const copyColor = copyAge !== null && copyAge >= 4 ? '#f43f5e' : copyAge !== null && copyAge >= 2 ? '#fbbf24' : '#34d399';
-
-  const stackBadges = (auditedLead.tech_stack || []).slice(0, 6).map(t =>
-    `<span style="background:rgba(255,255,255,0.07);padding:2px 5px;border-radius:3px;color:#cbd5e1;font-size:0.72rem;">${escapeHtml(t)}</span>`
-  ).join(' ') || '<span style="color:#64748b;">Not detected</span>';
-
-  const secScore = ta.dimension_scores?.security ?? null;
-  const secColor = secScore !== null ? (secScore >= 15 ? '#34d399' : secScore >= 8 ? '#fbbf24' : '#f43f5e') : '#94a3b8';
-
-  const grade = ta.grade ? `<span style="font-weight:700;color:#a78bfa;">${ta.grade} (${ta.maturity_score ?? '—'}/100)</span>` : '<span style="color:#64748b;">—</span>';
-
-  techContainer.innerHTML = `
-    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <span style="color:#94a3b8;">Overall Grade</span>${grade}
-    </div>
-    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <span style="color:#94a3b8;">SSL / HTTPS</span>${sslBadge}
-    </div>
-    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <span style="color:#94a3b8;">Load Time</span>
-      <span style="color:${loadColor};font-weight:600;">${loadSec}${ttfb ? ' · ' + ttfb : ''}${lcp ? ' · ' + lcp : ''}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <span style="color:#94a3b8;">Security Headers</span>
-      <span style="color:${secColor};font-weight:600;">${secScore !== null ? secScore + '/20' : '—'}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <span style="color:#94a3b8;">Copyright Year</span>
-      <span style="color:${copyColor};font-weight:600;">${copyYear}${copyAge !== null ? ` (${copyAge}yr old)` : ''}</span>
-    </div>
-    <div style="border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:5px;">
-      <div style="color:#94a3b8;margin-bottom:3px;">Tech Stack</div>
-      <div>${stackBadges}</div>
-    </div>
-  `;
-
-  // 2. New findings checklist
-  const findingsContainer = document.getElementById('auditNewFindings');
-  if (!newFindings || newFindings.length === 0) {
-    findingsContainer.innerHTML = `
-      <div style="color:#64748b;font-style:italic;font-size:0.8rem;padding:8px 0;text-align:center;">
-        No new signals found — live scan matches AI profile.
-      </div>`;
+  if (isOnHold) {
+    // Pause the call: stop the running stopwatch
+    if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+    btn.innerHTML = ICONS.play;
+    btn.title = 'Resume Call';
   } else {
-    const sevColor = { critical:'#f43f5e', high:'#fb923c', medium:'#fbbf24', low:'#94a3b8', info:'#38bdf8' };
-    findingsContainer.innerHTML = newFindings.map((f) => {
-      const col = sevColor[f.severity] || '#94a3b8';
-      return `
-        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.07);background:rgba(0,0,0,0.25);transition:background 0.15s;"
-          onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.25)'">
-          <input type="checkbox" data-finding-id="${escapeHtml(f.id)}" class="audit-finding-cb" style="margin-top:2px;accent-color:#f59e0b;cursor:pointer;" />
-          <div style="flex:1;">
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
-              <span style="font-size:0.65rem;font-weight:800;text-transform:uppercase;color:${col};background:${col}18;border:1px solid ${col}44;padding:1px 5px;border-radius:3px;">${escapeHtml(f.severity)}</span>
-              <span style="font-size:0.68rem;color:#64748b;text-transform:uppercase;">${escapeHtml(f.category)}</span>
-            </div>
-            <div style="font-size:0.8rem;color:#e2e8f0;line-height:1.35;">${escapeHtml(f.label)}</div>
-          </div>
-        </label>`;
-    }).join('');
+    resumeCallTimer();
+    btn.innerHTML = ICONS.pause;
+    btn.title = 'Hold Call';
   }
+}
+function openTransferModal() {
+  alert('Transfer feature: select SDR or Account Executive queue.');
+}
 
-  // 3. Re-synthesized pitch hook preview
-  const pitchPreview = document.getElementById('auditPitchPreview');
-  pitchPreview.textContent = auditedLead.battlecard?.elevator_opener || 'Hi, calling from Big Binary Tech...';
-
-  document.getElementById('liveAuditModal').style.display = 'flex';
-};
-
-window.closeLiveAuditModal = function() {
-  document.getElementById('liveAuditModal').style.display = 'none';
-};
-
-window.applyLiveAuditFindings = async function() {
-  const currentLead = callerLeads[currentIndex];
-  if (!currentLead) { closeLiveAuditModal(); return; }
-
-  const checked = [...document.querySelectorAll('.audit-finding-cb:checked')];
-  if (checked.length === 0) {
-    closeLiveAuditModal();
-    showToast('No signals selected — nothing applied.');
-    return;
-  }
-
-  const allFindings = window._latestNewFindings || [];
-  const selectedIds = new Set(checked.map(cb => cb.dataset.findingId));
-  const selectedFindings = allFindings.filter(f => selectedIds.has(f.id));
-
-  const btn = document.querySelector('[onclick="applyLiveAuditFindings()"]');
-  if (btn) { btn.textContent = 'Applying...'; btn.disabled = true; }
-
-  try {
-    const res = await fetch(`/api/leads/${currentLead.id}/apply-findings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selected_findings: selectedFindings })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Apply failed');
-
-    Object.assign(currentLead, data.lead);
-    renderActiveLead();
-    closeLiveAuditModal();
-    showToast(`Applied ${selectedFindings.length} signal${selectedFindings.length !== 1 ? 's' : ''} to battlecard for "${currentLead.name}"!`);
-  } catch (err) {
-    showToast(`Apply error: ${err.message}`, false);
-  } finally {
-    if (btn) { btn.textContent = 'Apply Selected to Battlecard'; btn.disabled = false; }
-  }
-};
-
-window.pushCallerLeadToClay = async function() {
+// Shared helper: hit a per-lead POST endpoint, merge the persisted lead back, re-render.
+async function callLeadAction(endpoint, btnId, labels, onDone, body) {
   const lead = callerLeads[currentIndex];
   if (!lead) return;
-
-  const webhookUrl = localStorage.getItem('clay_webhook_url');
-  if (!webhookUrl) {
-    const entered = prompt('Enter your Clay Inbound Webhook URL (from your Clay Table):');
-    if (!entered || !entered.startsWith('http')) return;
-    localStorage.setItem('clay_webhook_url', entered.trim());
-  }
-
-  const activeWebhook = localStorage.getItem('clay_webhook_url');
-  const btn = document.getElementById('callerClayBtn');
-  const origText = btn.innerHTML;
-  btn.innerHTML = '⏳ Pushing...';
-  btn.disabled = true;
-
+  const btn = document.getElementById(btnId);
+  const original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = labels.busy; }
   try {
-    const res = await fetch(`/api/leads/${lead.id}/clay-push`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhook_url: activeWebhook })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to push');
-
-    showToast(`🧊 Pushed "${lead.name}" to Clay!`);
+    const opts = { method: 'POST' };
+    if (body) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
+    const res = await fetch(`/api/leads/${lead.id || lead._id}/${endpoint}`, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (data.lead) { Object.assign(lead, data.lead); renderActiveLead(); }
+    if (onDone) onDone(data);
+    if (btn) { btn.textContent = labels.done; setTimeout(() => { btn.textContent = original || labels.idle; }, 1400); }
   } catch (err) {
-    showToast(`Clay Push Error: ${err.message}`, false);
+    alert(`${labels.name} failed: ${err.message}`);
+    if (btn) btn.textContent = original || labels.idle;
   } finally {
-    btn.innerHTML = origText;
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
-};
+}
 
-// ─── 8 Specialized Buyer Persona Pitch Engine ────────────────────────────────
+// Render a dismissible results panel below the contact strip.
+function showActionResult(title, bodyHtml) {
+  const box = document.getElementById('actionResult');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="action-result">
+      <div class="action-result-head">
+        <span>${esc(title)}</span>
+        <button class="action-result-close" onclick="document.getElementById('actionResult').style.display='none'">✕</button>
+      </div>
+      <div class="action-result-body">${bodyHtml}</div>
+    </div>`;
+}
 
-const PERSONA_SCRIPTS = {
-  FOUNDER_CEO: {
-    label: 'Founder / CEO',
-    getScript: (lead) => `Hi, calling from Big Binary Tech's technical advisory team. We recently ran an operations audit on ${lead.name}. As the Founder, when headcount grows faster than internal systems, operations teams get bogged down in manual workarounds. We act as an outsourced product & engineering partner to modernize workflows and cut admin drag by 60% with zero downtime. Do you have 2 minutes to hear the 3 diagnostic points we identified?`
-  },
-  OPERATIONS_COO: {
-    label: 'COO / Operations Director',
-    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with COOs and Operations Directors to eliminate stock variances, accelerate branch coordination, and remove manual dispatch workarounds with unified Odoo ERP and POS automation. I noticed ${lead.name}'s backend has a couple of synchronization gaps between field orders and inventory. Are manual handoffs costing your ops team time each week?`
-  },
-  FINANCE_CFO: {
-    label: 'CFO / Finance Director',
-    getScript: (lead) => `Hi, calling from Big Binary Tech's ERP solutions team. We help CFOs and Finance Directors eliminate late month-end closes, automate AP/AR reconciliation, and ensure 100% compliance with ZATCA/VAT e-invoicing and Making Tax Digital. When systems don't talk to accounting, businesses lose hours on manual data matching. How is your finance team currently managing cross-system reconciliation?`
-  },
-  REVOPS_CRM: {
-    label: 'Head of Revenue Operations',
-    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with RevOps and CRM Directors to bridge real-time synchronization between CRM (HubSpot/Salesforce/Zoho) and Odoo ERP, automate WhatsApp-to-CRM lead capture, and keep sales and finance perfectly aligned. We eliminate duplicate data entry between pipeline and billing. Is lead routing or billing sync a friction point right now?`
-  },
-  HR_PEOPLE: {
-    label: 'HR Director / People Ops',
-    getScript: (lead) => `Hi, Big Binary Tech here. We help HR Directors and People Ops leaders automate onboarding, employee self-service portals, and WPS/GOSI compliance reporting across UAE/KSA. In fact, we recently helped a regional firm reduce their monthly WPS reporting and onboarding cycle from 3 days down to under 2 hours. Would an automated HR workflow bridge be valuable for your team?`
-  },
-  TECH_CIO_CTO: {
-    label: 'CIO / CTO / Head of IT',
-    getScript: (lead) => `Hi, calling from Big Binary Tech's engineering team. We act as the specialized 24/7 ERP infrastructure and integration partner for CIOs and IT Directors. We deliver resilient API bridges, role-based security audits, and guaranteed 15-minute SLA ticket support at half standard partner rates — without overburdening your internal developers. Could your IT team benefit from specialized Odoo infrastructure support?`
-  },
-  RETAIL_RESTAURANT_POS: {
-    label: 'Retail / Restaurant Ops Director',
-    getScript: (lead) => `Hi, calling from Big Binary Tech. We work with retail and restaurant operations to deploy zero-downtime multi-branch POS, KDS, hardware integration, and real-time inventory tracking. We help managers prevent store checkout slowdowns, eliminate stock discrepancies, and speed up table turns. Are POS hardware glitches or multi-store stock sync an issue across your locations?`
-  },
-  MARKETING_GROWTH: {
-    label: 'VP Marketing / Head of Growth',
-    getScript: (lead) => `Hi, calling from Big Binary Tech's growth advisory group. We work with Marketing Leaders and Growth Directors to build high-converting inbound funnels, localized Arabic/English lead capture, and automated attribution tracking so every dollar spent links directly to closed deals. Are you looking to lower customer acquisition costs or improve lead quality this quarter?`
-  }
-};
+async function runCallerLiveAudit() {
+  await callLeadAction('live-audit', 'callerLiveAuditBtn',
+    { name: 'Live audit', busy: 'Auditing…', done: 'Audited ✓', idle: 'Live Audit' },
+    (data) => {
+      const findings = data.new_findings || [];
+      const sevColor = { critical: '#fb7185', high: '#fbbf24', medium: '#60a5fa', low: '#94a3b8', info: '#34d399' };
+      const rows = findings.length
+        ? findings.map(f => `<div class="ar-line"><span class="ar-dot" style="background:${sevColor[f.severity] || '#94a3b8'}"></span><span class="ar-cat">${esc(f.category)}</span><span class="ar-label">${esc(f.label)}</span></div>`).join('')
+        : '<div class="ar-empty">No new signals vs. the stored profile — site data already up to date.</div>';
+      showActionResult('Live Web Audit', `<div class="ar-note">${esc(data.message || '')}</div>${rows}`);
+    });
+}
 
-window.setCallerPersona = function(personaKey) {
-  const lead = callerLeads[currentIndex];
-  if (!lead) return;
+async function runWarmEnrich() {
+  await callLeadAction('warm-enrich', 'callerWarmEnrichBtn',
+    { name: 'Deep research', busy: 'Researching…', done: 'Done ✓', idle: 'Research' },
+    (data) => {
+      const x = data.intel || {};
+      const bits = [];
+      if (x.verified_leader && x.verified_leader.name) bits.push(`<div class="ar-line"><span class="ar-cat">Leader</span><span class="ar-label">${esc(x.verified_leader.name)} — ${esc(x.verified_leader.title || '')}</span></div>`);
+      if ((x.current_erp || []).length) bits.push(`<div class="ar-line"><span class="ar-cat">Current ERP</span><span class="ar-label">${esc(x.current_erp.join(', '))}</span></div>`);
+      if (x.job_count) bits.push(`<div class="ar-line"><span class="ar-cat">Hiring</span><span class="ar-label">${x.job_count} open role(s)${x.remote_job_count ? `, ${x.remote_job_count} remote` : ''}</span></div>`);
+      (x.growth_signals || []).slice(0, 4).forEach(s => bits.push(`<div class="ar-line"><span class="ar-cat">Signal</span><span class="ar-label">${esc(s)}</span></div>`));
+      if (x.rabbit_hole_summary) bits.push(`<div class="ar-note" style="margin-top:0.4rem;">${esc(x.rabbit_hole_summary)}</div>`);
+      showActionResult('Deep Research', bits.length ? bits.join('') : '<div class="ar-empty">No additional intel found (job boards / research returned nothing new).</div>');
+    });
+}
 
-  const personaConfig = PERSONA_SCRIPTS[personaKey] || PERSONA_SCRIPTS.FOUNDER_CEO;
-
-  // Update button active states
-  document.querySelectorAll('.persona-btn').forEach(btn => {
-    if (btn.getAttribute('data-persona') === personaKey) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-
-  // Update badge
-  const badge = document.getElementById('activePersonaBadge');
-  if (badge) badge.textContent = personaConfig.label;
-
-  // Update Script box
-  const scriptBox = document.getElementById('callScriptBox');
-  if (scriptBox) {
-    scriptBox.textContent = personaConfig.getScript(lead);
-  }
-};
+async function pushCallerLeadToClay() {
+  const webhook_url = localStorage.getItem('clay_webhook_url') || '';
+  if (!webhook_url) { alert('Set your Clay webhook first (⚙️ Clay on the dashboard).'); return; }
+  await callLeadAction('clay-push', 'callerClayBtn',
+    { name: 'Clay push', busy: 'Pushing…', done: 'Pushed ✓', idle: 'Clay' },
+    (data) => showActionResult('Clay Waterfall', `<div class="ar-note">${esc((data && data.message) || 'Lead dispatched to Clay for waterfall enrichment (verified emails, cell phones). Results return via the Sync CSV / webhook.')}</div>`),
+    { webhook_url });
+}

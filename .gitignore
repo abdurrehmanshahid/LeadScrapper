@@ -15,3 +15,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 .gemini/
+
+# Claude Code manual-enrichment scratch files
+data/_enrich_work.json
+data/_enrich_analyses.json

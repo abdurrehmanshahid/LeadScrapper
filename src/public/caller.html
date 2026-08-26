@@ -1,457 +1,448 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Big Binary Tech - SDR Caller Portal</title>
+  <title>Big Binary Tech - SDR Caller Workspace</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
 </head>
+
 <body>
   <!-- Header -->
   <header class="navbar">
     <div class="brand">
-      <img src="images/logo.png" alt="Big Binary Tech Logo" class="brand-logo-img">
+      <img src="images/logo.png" alt="Big Binary Tech" class="brand-badge-icon">
       <div class="brand-text">
         <h1>BIG BINARY <span class="tech-tag">TECH</span></h1>
-        <span class="sub-title">SDR Cold Calling & Lead Rescue Portal</span>
+        <span class="sub-title">High-Velocity SDR Caller Workspace</span>
       </div>
     </div>
+
+    <!-- Lead Counter & Nav Controls -->
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button id="prevLeadBtn" class="btn btn-secondary btn-sm" title="Keyboard: ← Arrow">◀ Prev</button>
+      <span id="leadCounter"
+        style="font-size: 0.85rem; color: #cbd5e1; font-weight: 700; min-width: 90px; text-align: center;">Lead 1 of
+        0</span>
+      <button id="nextLeadBtn" class="btn btn-secondary btn-sm" title="Keyboard: → Arrow">Next ▶</button>
+    </div>
+
     <div class="nav-actions">
-      <a href="index.html" class="btn btn-secondary">📊 Return to Dashboard</a>
+      <a href="index.html" class="btn btn-secondary btn-sm">Return to Dashboard</a>
     </div>
   </header>
 
-  <!-- Caller Main Container -->
-  <main class="caller-container">
-    <!-- Top Navigation Controls -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <button id="prevLeadBtn" class="btn btn-secondary btn-sm" title="Keyboard: ← Arrow">◀ Prev</button>
-        <span id="leadCounter" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Lead 0 of 0</span>
-        <button id="nextLeadBtn" class="btn btn-secondary btn-sm" title="Keyboard: → Arrow">Next ▶</button>
-        <span style="font-size: 0.7rem; color: var(--text-dim); margin-left: 4px;">Keys: ←→ navigate · 1 Interested · 2 Callback · 3 No Answer · 4 Not a Fit</span>
+  <!-- Caller Main Workspace -->
+  <main class="caller-wrapper">
+
+    <!-- Top: 8 Buyer Persona Quick-Select Tabs Bar (Matching Slide 3) -->
+    <section class="persona-tabs-bar" id="personaTabsBar">
+      <div class="persona-tab" data-persona="CFO" onclick="selectPersona('CFO')">
+        <span class="persona-code">CFO</span>
+        <span class="persona-sub">Finance & VAT/Tax</span>
+      </div>
+      <div class="persona-tab" data-persona="COO" onclick="selectPersona('COO')">
+        <span class="persona-code">COO</span>
+        <span class="persona-sub">Operations & Stock</span>
+      </div>
+      <div class="persona-tab active" data-persona="CTO" onclick="selectPersona('CTO')">
+        <span class="persona-code">CTO</span>
+        <span class="persona-sub">Tech Debt & SLA</span>
+      </div>
+      <div class="persona-tab" data-persona="RevOps" onclick="selectPersona('RevOps')">
+        <span class="persona-code">RevOps</span>
+        <span class="persona-sub">CRM & Pipeline</span>
+      </div>
+      <div class="persona-tab" data-persona="Founder" onclick="selectPersona('Founder')">
+        <span class="persona-code">Founder</span>
+        <span class="persona-sub">Agile Scaling</span>
+      </div>
+      <div class="persona-tab" data-persona="VP_Eng" onclick="selectPersona('VP_Eng')">
+        <span class="persona-code">VP Engineering</span>
+        <span class="persona-sub">Refactoring & CI/CD</span>
+      </div>
+      <div class="persona-tab" data-persona="IT_Director" onclick="selectPersona('IT_Director')">
+        <span class="persona-code">IT Director</span>
+        <span class="persona-sub">Infra & Backups</span>
+      </div>
+      <div class="persona-tab" data-persona="Product_Lead" onclick="selectPersona('Product_Lead')">
+        <span class="persona-code">Product Lead</span>
+        <span class="persona-sub">Automation & UX</span>
+      </div>
+    </section>
+
+    <!-- Active Lead Banner -->
+    <div
+      style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.9rem 1.4rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+        <span id="callCategoryBadge" class="badge badge-rescue">ODOO BPO / RESCUE</span>
+        <span id="callScorePill" class="score-pill score-high">88% Propensity Fit</span>
+        <span id="callSizeBadge" style="font-size: 0.75rem; font-weight: 700; color: #34d399;">11–50 Employees</span>
+        <h2 id="callCompanyName" style="font-size: 1.35rem; font-weight: 900; color: #ffffff; margin-left: 0.25rem;">
+          Hooli Corp</h2>
       </div>
 
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-        <select id="callerCategoryFilter" class="form-control" style="width: auto; padding: 0.35rem 0.65rem; font-size: 0.8rem;">
-          <option value="ALL">All Categories</option>
-          <option value="NEW_IMPLEMENTATION">New Implementation</option>
-          <option value="BPO_RESCUE">Odoo BPO / Rescue</option>
-        </select>
-        <select id="callerSizeFilter" class="form-control" style="width: auto; padding: 0.35rem 0.65rem; font-size: 0.8rem;">
-          <option value="ALL">All Sizes</option>
-          <option value="small">Small (1–50)</option>
-          <option value="medium">Medium (51–250)</option>
-          <option value="large">Large (251+)</option>
-          <option value="out_of_scope">Too Large — Hidden</option>
-        </select>
-        <label title="Import verified contacts from a Clay CSV export" style="cursor:pointer;">
-          <input type="file" id="clayCsvInput" accept=".csv" style="display:none;" onchange="importClayCsv(this)">
-          <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);color:#60a5fa;border-radius:6px;padding:0.3rem 0.7rem;font-size:0.75rem;font-weight:700;cursor:pointer;" onmouseover="this.style.background='rgba(96,165,250,0.2)'" onmouseout="this.style.background='rgba(96,165,250,0.1)'">
-            📥 Import Clay CSV
-          </span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Active Caller Card -->
-    <div class="caller-card" id="callerCard">
-      <!-- Loading Placeholder -->
-      <div id="noLeadsMessage" style="display: none; text-align: center; padding: 3rem 1rem;">
-        <div style="font-size: 2.5rem; margin-bottom: 1rem;">📞</div>
-        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">No Leads Ready to Call</h3>
-        <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem;">
-          Please run a scraper from the main dashboard to populate leads.
-        </p>
-        <a href="index.html" class="btn btn-primary">Go to Dashboard</a>
-      </div>
-
-      <!-- Lead Details Wrapper -->
-      <div id="leadContentWrapper">
-        <div class="caller-hero">
-          <div>
-            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
-              <span id="callCategoryBadge" class="badge badge-new">NEW_IMPLEMENTATION</span>
-              <span id="callSizeBadge" style="font-size: 0.72rem; font-weight: 700; margin-left: 2px; opacity: 0.9;"></span>
-              <span id="callScorePill" class="score-pill score-high">🎯 88% Success Chance</span>
-              <button id="callerLiveAuditBtn" onclick="runCallerLiveAudit()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #f59e0b; border-color: rgba(245,158,11,0.5); cursor: pointer;" title="Crawls live website & negative customer reviews right now and re-synthesizes the pitch">⚡ Live Tech & Review Audit</button>
-              <button onclick="openEditModal()" class="btn btn-accent btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; cursor: pointer;">✏️ Edit</button>
-              <button id="callerAiEnrichBtn" onclick="runCallerAiEnrich()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #a78bfa; border-color: rgba(167,139,250,0.4); cursor: pointer;">✨ AI Auto-Enrich</button>
-              <button id="callerClayBtn" onclick="pushCallerLeadToClay()" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #60a5fa; border-color: rgba(96,165,250,0.4); cursor: pointer;">🧊 Push to Clay</button>
-            </div>
-            <h2 id="callCompanyName" style="font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em;">Loading...</h2>
-            <div id="callCompanyMeta" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
-          </div>
-
-          <div class="caller-phone-box">
-            <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Direct Phone</div>
-            <div id="callPhoneNumber" class="caller-phone-number">--</div>
-            <div style="font-size: 0.75rem; color: #34d399; margin-top: 0.2rem;" id="callWebsiteLink"></div>
-            <button onclick="openEditModal()" class="btn btn-secondary btn-sm" style="margin-top: 0.5rem; width: 100%; font-size: 0.75rem; color: #38bdf8; border-color: rgba(56,189,248,0.4); font-weight: 700;">✏️ Edit Company & Pitch</button>
-          </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="text-align: right;">
+          <div style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase;">Direct Line</div>
+          <div id="callPhoneNumber"
+            style="font-size: 1.15rem; font-weight: 800; color: #3b82f6; letter-spacing: 0.02em;">(555) 382-9912</div>
         </div>
-
-        <!-- Editable Phone Row -->
-        <div id="callEditPhoneRow" style="margin-bottom: 1rem; display: none;">
-          <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em;">✏️ Update Phone Number</div>
-          <div style="display: flex; gap: 0.5rem;">
-            <input id="editPhoneInput" type="text" placeholder="(555) 123-4567" class="form-control" style="font-size: 0.85rem; padding: 0.4rem 0.65rem;">
-            <button onclick="saveEditedPhone()" class="btn btn-accent" style="font-size: 0.78rem; padding: 0.35rem 0.85rem; white-space: nowrap;">Save Phone</button>
-            <button onclick="document.getElementById('callEditPhoneRow').style.display='none'" class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.85rem;">✕</button>
-          </div>
-        </div>
-
-        <!-- Firmographics & Opportunity Deal Bar -->
-        <div id="callOpportunityBar" style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.65rem 0.9rem; align-items: center;">
-          <span id="callFitTierBadge" class="score-pill" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); font-size: 0.75rem; font-weight: 800;">
-            🌟 Solid Opportunity (Tier 2)
-          </span>
-          <span id="callDealTierBadge" class="score-pill" style="background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); font-size: 0.75rem; font-weight: 800;">
-            💰 Deal Tier: $25,000 - $75,000
-          </span>
-          <span id="callArchetypeBadge" class="score-pill" style="background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); font-size: 0.75rem; font-weight: 700;">
-            🏢 Healthcare & Medical Services
-          </span>
-        </div>
-
-        <!-- Decision Makers -->
-        <div id="callDecisionMakersSection" style="margin-bottom: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <h4 style="font-size: 0.8rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
-              👤 Verified Decision Makers & Executives:
-            </h4>
-            <button onclick="toggleAddContact()" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.4); color: #a78bfa; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.72rem; cursor: pointer; font-weight: 700;">+ Add Contact</button>
-          </div>
-          <div id="callDecisionMakers" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
-
-          <!-- Inline add-contact form (hidden by default) -->
-          <div id="addContactForm" style="display: none; margin-top: 0.75rem; background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.25); border-radius: 8px; padding: 0.85rem 1rem;">
-            <div style="font-size: 0.72rem; color: #a78bfa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">Add Contact Manually</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input id="newContactName"  type="text" placeholder="Full Name *" class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;">
-              <input id="newContactTitle" type="text" placeholder="Title / Role" class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;">
-              <input id="newContactEmail" type="text" placeholder="Email (optional)" class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;">
-              <input id="newContactLinkedIn" type="text" placeholder="LinkedIn URL (optional)" class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;">
-            </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button onclick="saveNewContact()" class="btn btn-accent" style="font-size: 0.78rem; padding: 0.35rem 0.85rem;">Save Contact</button>
-              <button onclick="toggleAddContact()" class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.85rem;">Cancel</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Odoo Sales Playbook & Recommended Modules Section -->
-        <div id="callPlaybookSection" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(56, 189, 248, 0.08)); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: var(--radius-md); padding: 1.15rem 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
-            <span style="font-size: 0.8rem; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em;">
-              🚀 Tailored Odoo Sales Playbook & Recommended Modules
-            </span>
-          </div>
-
-          <div style="margin-bottom: 0.75rem;">
-            <div style="font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 0.35rem;">
-              🧩 Recommended Odoo Apps:
-            </div>
-            <div id="callRecommendedModules" style="display: flex; flex-wrap: wrap; gap: 0.4rem;"></div>
-          </div>
-
-          <!-- 6-Phase Action Plan Roadmap -->
-          <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem 1rem; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="font-size: 0.7rem; text-transform: uppercase; color: #38bdf8; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 0.4rem;">
-              🗺️ 6-Phase Implementation Roadmap:
-            </div>
-            <div id="callRoadmapList" style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.775rem; color: #cbd5e1;"></div>
-          </div>
-        </div>
-
-        <!-- Problem Analysis Section -->
-        <div style="margin-bottom: 1.25rem;">
-          <h4 style="font-size: 0.8rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-            🚨 Identified Operational Friction & Gaps:
-          </h4>
-          <ul id="callProblemList" class="problem-list"></ul>
-        </div>
-
-        <!-- 30s Elevator Hook with 8 Persona Switcher -->
-        <div style="margin-bottom: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
-            <h4 style="font-size: 0.8rem; color: #818cf8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
-              🗣️ 30-Second Consultative Script (Targeted by Buyer Role):
-            </h4>
-            <span id="activePersonaBadge" style="font-size: 0.72rem; color: #a78bfa; font-weight: 700; background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.3); border-radius: 4px; padding: 0.15rem 0.5rem;">Founder / CEO</span>
-          </div>
-
-          <!-- 8 Persona Buttons -->
-          <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.6rem;">
-            <button onclick="setCallerPersona('FOUNDER_CEO')" class="persona-btn active" data-persona="FOUNDER_CEO">🏢 Founder / CEO</button>
-            <button onclick="setCallerPersona('OPERATIONS_COO')" class="persona-btn" data-persona="OPERATIONS_COO">👔 COO / Ops (ERP/POS)</button>
-            <button onclick="setCallerPersona('FINANCE_CFO')" class="persona-btn" data-persona="FINANCE_CFO">💰 CFO (ZATCA/e-Invoice)</button>
-            <button onclick="setCallerPersona('REVOPS_CRM')" class="persona-btn" data-persona="REVOPS_CRM">📈 RevOps (CRM/WhatsApp)</button>
-            <button onclick="setCallerPersona('HR_PEOPLE')" class="persona-btn" data-persona="HR_PEOPLE">👥 HR (WPS/GOSI)</button>
-            <button onclick="setCallerPersona('TECH_CIO_CTO')" class="persona-btn" data-persona="TECH_CIO_CTO">⚙️ CIO/CTO (SLA/APIs)</button>
-            <button onclick="setCallerPersona('RETAIL_RESTAURANT_POS')" class="persona-btn" data-persona="RETAIL_RESTAURANT_POS">🛒 Retail/Restaurant POS</button>
-            <button onclick="setCallerPersona('MARKETING_GROWTH')" class="persona-btn" data-persona="MARKETING_GROWTH">📣 VP Growth</button>
-          </div>
-
-          <div id="callScriptBox" class="script-box"></div>
-        </div>
-
-        <!-- Objection Handlers -->
-        <div style="margin-bottom: 1.5rem;">
-          <h4 style="font-size: 0.8rem; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-            🛡️ Common Objections & Quick Counter:
-          </h4>
-          <div id="callObjectionsList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
-        </div>
-
-        <!-- Call Outcome Logger -->
-        <div style="border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-            <label class="form-label" style="margin: 0;">Call Notes & Next Actions</label>
-            <div id="callScheduledFollowUpBadge" style="display: none; font-size: 0.75rem; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 8px; border-radius: 4px;"></div>
-          </div>
-          <input type="text" id="callNotesInput" class="form-control" placeholder="e.g. Spoke to operations director, interested in inventory sync...">
-
-          <div class="action-buttons" style="margin-top: 0.75rem;">
-            <button class="btn btn-accent" onclick="logOutcome('Interested')" title="Key: 1">
-              ✅ Interested (Schedule Follow-Up)
-            </button>
-            <button class="btn btn-secondary" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); font-weight: 700;" onclick="logOutcome('Callback Requested')" title="Key: 2">
-              📅 Callback Requested
-            </button>
-            <button class="btn btn-secondary" style="color: #9ca3af;" onclick="logOutcome('No Answer / Voicemail')" title="Key: 3">
-              📵 No Answer / Voicemail
-            </button>
-            <button class="btn btn-secondary" style="color: #fb7185; border-color: rgba(244, 63, 94, 0.4); font-weight: 700;" onclick="logOutcome('Not a Fit')" title="Key: 4">
-              ❌ Not a Fit
-            </button>
-          </div>
-        </div>
+        <button onclick="openEditModal()" class="btn btn-secondary btn-sm" title="Edit Company & Pitch">Edit</button>
+        <button id="callerLiveAuditBtn" onclick="runCallerLiveAudit()" class="btn btn-secondary btn-sm"
+          style="color: #f59e0b; border-color: rgba(245,158,11,0.4);" title="Run Live Tech Audit">Live Audit</button>
+        <button id="callerWarmEnrichBtn" onclick="runWarmEnrich()" class="btn btn-secondary btn-sm"
+          style="color: #34d399; border-color: rgba(52,211,153,0.4);" title="Deep Research">Research</button>
+        <button id="callerClayBtn" onclick="pushCallerLeadToClay()" class="btn btn-secondary btn-sm"
+          style="color: #60a5fa; border-color: rgba(96,165,250,0.4);">Clay</button>
       </div>
     </div>
+
+    <!-- Essential Contact Info & Top-3 Decision Makers (surfaced on top) -->
+    <section class="contact-strip" id="contactStrip"></section>
+
+    <!-- Results from Live Audit / Research / Clay (dismissible) -->
+    <section id="actionResult" style="display: none;"></section>
+
+    <!-- 4-Column Consultative Battlecard Layout (Matching Slide 3) -->
+    <section class="sdr-grid-4col">
+
+      <!-- Column 1: Software Vulnerability Index (Slide 3) -->
+      <div class="sdr-card">
+        <div class="sdr-card-title">
+          <span>Software Vulnerability Index</span>
+          <span style="font-size: 0.65rem; color: #94a3b8; cursor: help; border: 1px solid currentColor; border-radius: 50%; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; font-style: italic; font-weight: 700;"
+            title="Composite risk score from CMS version, review friction & SLA overhead">i</span>
+        </div>
+
+        <div class="gauge-container">
+          <svg class="gauge-svg" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#3b82f6" />
+                <stop offset="60%" stop-color="#f59e0b" />
+                <stop offset="100%" stop-color="#f43f5e" />
+              </linearGradient>
+            </defs>
+            <circle class="gauge-circle-bg" cx="100" cy="100" r="75" />
+            <circle class="gauge-circle-progress" id="gaugeProgressCircle" cx="100" cy="100" r="75"
+              stroke="url(#gaugeGradient)" stroke-dasharray="471" stroke-dashoffset="70" />
+          </svg>
+          <div class="gauge-center-text">
+            <div class="gauge-percent" id="gaugePercentText">85%</div>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: -0.5rem; margin-bottom: 0.75rem;">
+          <span class="gauge-risk-badge" id="gaugeRiskLabel">High Risk</span>
+        </div>
+
+        <!-- Mini Sparkline Wave -->
+        <div style="width: 100%; height: 40px; margin-top: auto;">
+          <svg viewBox="0 0 200 40" preserveAspectRatio="none" style="width:100%; height:100%;">
+            <path d="M0,35 Q30,10 60,25 T120,15 T180,30 T200,20" fill="none" stroke="#60a5fa" stroke-width="2" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Column 2: Grounded Intelligence (Gemini Google Search) -->
+      <div class="sdr-card">
+        <div class="sdr-card-title">
+          <span>Grounded Intelligence</span>
+          <span style="font-size: 0.7rem; color: #34d399; font-weight: 700;">Gemini Search</span>
+        </div>
+
+        <div class="ga-toolbar">
+          <button id="groundedRunBtn" onclick="runGroundedAnalysis()" class="btn btn-primary btn-sm">Run Gemini Analysis</button>
+          <button id="gaEditBtn" onclick="openAnalysisEditor()" class="btn btn-secondary btn-sm">Edit / Add manually</button>
+          <button id="gaClayEnrichBtn" onclick="runAnalysisClayEnrich()" class="btn btn-secondary btn-sm">Run Clay Enrichment</button>
+          <button id="gaClayPullBtn" onclick="pullFromClay()" class="btn btn-secondary btn-sm">Pull from Clay</button>
+        </div>
+
+        <!-- Grounded reviews → Odoo mapping + verified contacts (scrollable) -->
+        <div class="grounded-scroll" id="groundedBox"><!-- injected by renderGroundedAnalysis() --></div>
+      </div>
+
+      <!-- Column 3: Live Consultative Battlecard Diagnostic Pitch Script (Slide 3) -->
+      <div class="sdr-card">
+        <div class="sdr-card-title">
+          <span>Live Consultative Battlecard Diagnostic Script</span>
+          <span id="activePersonaBadge" style="font-size: 0.7rem; color: #818cf8; font-weight: 800;">Target: CTO</span>
+        </div>
+
+        <div class="script-subtabs">
+          <button class="script-tab-btn active" id="tabTalkingPoints"
+            onclick="switchScriptTab('talking_points')">Talking Points</button>
+          <button class="script-tab-btn" id="tabQuestions" onclick="switchScriptTab('questions')">Questions</button>
+          <button class="script-tab-btn" id="tabValuePropos" onclick="switchScriptTab('value_propos')">Value
+            Propos.</button>
+          <button class="script-tab-btn" id="tabPrescription"
+            onclick="switchScriptTab('prescription')">Prescription</button>
+        </div>
+
+        <div class="script-content-box" id="scriptContentBox">
+          <!-- Populated dynamically based on persona & lead data -->
+        </div>
+
+        <!-- Quick Question / Notes Input Bar -->
+        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+          <input type="text" id="callerQuickNoteInput" class="form-control"
+            placeholder="Type quick prospect response or note..." style="font-size: 0.75rem;">
+          <button onclick="saveQuickNote()" class="btn btn-primary btn-sm">Send</button>
+        </div>
+      </div>
+
+      <!-- Column 4: Objection Counter & Rebuttal Arsenal (Slide 3) -->
+      <div class="sdr-card">
+        <div class="sdr-card-title">
+          <span>Objection Counter & Rebuttals</span>
+          <span style="font-size: 0.7rem; color: #94a3b8;">1-Click Tally</span>
+        </div>
+
+        <div class="objection-stack" id="objectionStack">
+          <!-- Populated dynamically with live counters & rebuttals -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Bottom High-Velocity SDR Keyboard & Action Bar (Matching Slide 3) -->
+    <section class="sdr-bottom-bar">
+      <!-- Call Control Circle Buttons -->
+      <div class="sdr-audio-controls">
+        <button class="sdr-circle-btn" id="muteBtn" onclick="toggleMute()" title="Mute Audio" aria-label="Mute"></button>
+        <button class="sdr-circle-btn" id="holdBtn" onclick="toggleHold()" title="Hold Call" aria-label="Hold"></button>
+        <button class="sdr-circle-btn" id="transferBtn" onclick="openTransferModal()" title="Transfer Call" aria-label="Transfer">⇄</button>
+      </div>
+
+      <!-- Action & Keyboard Prompt Badges -->
+      <div class="sdr-key-shortcuts-group">
+        <div class="sdr-action-badge" onclick="openOutcomeModal()">
+          <span>[Space to Log Outcome]</span>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <button class="sdr-action-badge" onclick="navigateLead(-1)" style="padding: 0.45rem 0.6rem;">←</button>
+          <button class="sdr-action-badge" onclick="openOutcomeModal()" style="padding: 0.45rem 0.6rem;">↓</button>
+          <button class="sdr-action-badge" onclick="navigateLead(1)" style="padding: 0.45rem 0.6rem;">→</button>
+          <span style="font-size: 0.7rem; color: #94a3b8; margin-left: 4px;">[Arrow keys to navigate]</span>
+        </div>
+        <div class="sdr-action-badge dial-btn" onclick="dialActiveLead()">
+          <span>[Enter to Dial]</span>
+        </div>
+      </div>
+
+      <!-- Real-time Activity & Duration Visualizer -->
+      <div class="sdr-activity-section">
+        <div class="sdr-duration-meta">
+          <div class="duration-label">Call Duration</div>
+          <div class="duration-value" id="callDurationTimer">02:45</div>
+        </div>
+        <div>
+          <div class="duration-label" style="text-align: right; margin-bottom: 2px;">Daily Activity</div>
+          <div class="audio-eq-bars">
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
-  <!-- Follow-Up Schedule & Outcome Modal -->
-  <div id="followUpModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(6px);">
-    <div class="modal-content" style="max-width: 520px; width: 95%; background: #0c1427; border: 1px solid rgba(16,185,129,0.4); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+  <!-- Outcome Modal for [Space to Log] -->
+  <div id="outcomeModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card" style="max-width: 500px;">
+      <h3 style="font-size: 1.15rem; font-weight: 800; color: #ffffff; margin-bottom: 0.5rem;">Log Call Outcome</h3>
+      <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 1rem;">Press 1–5 or click an outcome button to record
+        and move to next lead.</p>
+
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+        <button onclick="logOutcome('Interested')" class="btn btn-accent" style="justify-content: space-between;">
+          <span>[1] Interested / Demo Booked</span>
+          <span style="opacity: 0.7;">Key 1</span>
+        </button>
+        <button onclick="logOutcome('Callback Requested')" class="btn btn-secondary"
+          style="justify-content: space-between; color: #fbbf24; border-color: rgba(245,158,11,0.3);">
+          <span>[2] Callback Requested</span>
+          <span style="opacity: 0.7;">Key 2</span>
+        </button>
+        <button onclick="logOutcome('No Answer / Voicemail')" class="btn btn-secondary"
+          style="justify-content: space-between; color: #94a3b8;">
+          <span>[3] No Answer / Voicemail</span>
+          <span style="opacity: 0.7;">Key 3</span>
+        </button>
+        <button onclick="logOutcome('Not a Fit')" class="btn btn-secondary"
+          style="justify-content: space-between; color: #fb7185; border-color: rgba(251,113,133,0.3);">
+          <span>[4] Not a Fit / In-House Team</span>
+          <span style="opacity: 0.7;">Key 4</span>
+        </button>
+        <button onclick="logOutcome('Do Not Call')" class="btn btn-secondary"
+          style="justify-content: space-between; color: #f43f5e;">
+          <span>[5] Do Not Call</span>
+          <span style="opacity: 0.7;">Key 5</span>
+        </button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 0.75rem;">
         <div>
-          <h3 id="followUpModalTitle" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #34d399; display: flex; align-items: center; gap: 8px;">
-            📅 Schedule Follow-Up & Callback
-          </h3>
-          <span id="followUpModalCompany" style="font-size: 0.8rem; color: var(--text-muted);">Company Name</span>
+          <label class="form-label" style="font-size: 0.7rem; color: #94a3b8;">Call note (saved with the outcome)</label>
+          <input type="text" id="outcomeNote" class="form-control" placeholder="What was said / next step…">
         </div>
-        <button onclick="closeFollowUpModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
-      </div>
-
-      <div style="margin-bottom: 1rem;">
-        <label class="form-label" style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700;">⚡ Quick Presets:</label>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setFollowUpPreset(1, 10)" style="font-size: 0.75rem; font-weight: 700; color: #fbbf24;">🌅 Tomorrow 10 AM</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setFollowUpPreset(1, 14)" style="font-size: 0.75rem; font-weight: 700; color: #fbbf24;">☀️ Tomorrow 2 PM</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setFollowUpPreset(2, 10)" style="font-size: 0.75rem; font-weight: 700; color: #38bdf8;">📅 In 2 Days 10 AM</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setFollowUpPreset(7, 10)" style="font-size: 0.75rem; font-weight: 700; color: #a78bfa;">🚀 Next Week 10 AM</button>
-        </div>
-
-        <label class="form-label" style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700;">Exact Date & Time:</label>
-        <input type="datetime-local" id="followUpDateTimeInput" class="form-control" style="font-size: 0.9rem; padding: 0.5rem; margin-bottom: 1rem;">
-
-        <label class="form-label" style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700;">Call Notes / Next Action:</label>
-        <textarea id="followUpNotesInput" class="form-control" rows="2" placeholder="e.g. Spoke with Operations Director, wants 1-page proposal on inventory sync..."></textarea>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-        <button type="button" onclick="confirmSaveOutcomeWithoutSchedule()" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;">Skip Schedule</button>
-        <div style="display: flex; gap: 0.5rem;">
-          <button type="button" onclick="closeFollowUpModal()" class="btn btn-secondary btn-sm">Cancel</button>
-          <button type="button" onclick="confirmFollowUpSchedule()" class="btn btn-accent" style="font-weight: 700; padding: 0.45rem 1.2rem; background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
-            💾 Save & Next Lead ▶
-          </button>
+        <div>
+          <label class="form-label" style="font-size: 0.7rem; color: #94a3b8;">Follow-up date</label>
+          <input type="date" id="outcomeFollowUp" class="form-control" style="width: 160px;">
         </div>
       </div>
+
+      <button onclick="closeOutcomeModal()" class="btn btn-secondary btn-sm" style="width: 100%;">Cancel</button>
     </div>
   </div>
 
-  <!-- Comprehensive Company & Pitch Edit Modal -->
-  <div id="companyEditModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-
-    <div class="modal-content" style="max-width: 840px; width: 95%; max-height: 90vh; overflow-y: auto; background: #0c1427; border: 1px solid rgba(56,189,248,0.25); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.25rem;">
-        <div>
-          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-            ✏️ Edit Company Details & Pitch
-          </h3>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">Modify profile, decision makers, social channels, and pitch hooks</span>
-        </div>
-        <button onclick="closeEditModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
+  <!-- Edit Company & Pitch Modal -->
+  <div id="editModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: #ffffff;">Edit Lead Details & Talk Track</h3>
+        <button onclick="closeEditModal()" class="btn btn-secondary btn-sm">✕</button>
       </div>
-
-      <!-- Navigation Tabs -->
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; flex-wrap: wrap;">
-        <button id="tabBtnProfile" type="button" class="btn btn-sm btn-accent" onclick="switchEditTab('profile')">🏢 Company Profile</button>
-        <button id="tabBtnContacts" type="button" class="btn btn-sm btn-secondary" onclick="switchEditTab('contacts')">👥 Decision Makers</button>
-        <button id="tabBtnSocial" type="button" class="btn btn-sm btn-secondary" onclick="switchEditTab('social')">🌐 Social Media</button>
-        <button id="tabBtnPitch" type="button" class="btn btn-sm btn-secondary" onclick="switchEditTab('pitch')">🎙️ Odoo Pitch & Battlecard</button>
-      </div>
-
-      <!-- Form Content -->
-      <form id="editCompanyForm" onsubmit="event.preventDefault(); saveCompanyEdits();">
-        <!-- Tab 1: Profile -->
-        <div id="tabContentProfile" class="edit-tab-content">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div>
-              <label class="form-label">Company Name *</label>
-              <input id="editName" type="text" class="form-control" required>
-            </div>
-            <div>
-              <label class="form-label">Website URL</label>
-              <input id="editWebsite" type="text" class="form-control" placeholder="https://www.example.com">
-            </div>
-            <div>
-              <label class="form-label">Direct Phone</label>
-              <input id="editPhone" type="text" class="form-control" placeholder="+1 (555) 000-0000">
-            </div>
-            <div>
-              <label class="form-label">Primary Email</label>
-              <input id="editEmail" type="email" class="form-control" placeholder="contact@example.com">
-            </div>
-            <div>
-              <label class="form-label">Industry</label>
-              <input id="editIndustry" type="text" class="form-control" placeholder="e.g. Automotive & Transportation">
-            </div>
-            <div>
-              <label class="form-label">Employee / Team Size</label>
-              <input id="editSize" type="text" class="form-control" placeholder="e.g. 11-50">
-            </div>
+      <form id="editLeadForm" onsubmit="saveEditedLead(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Company Name</label>
+            <input type="text" id="editLeadName" class="form-control" required>
           </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Physical Street Address / Location</label>
-            <input id="editAddress" type="text" class="form-control" placeholder="e.g. 123 Main St, Los Angeles, CA">
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Website</label>
+            <input type="text" id="editLeadWebsite" class="form-control" placeholder="https://…">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Company Email</label>
+            <input type="text" id="editLeadEmail" class="form-control" placeholder="info@company.com">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Company LinkedIn</label>
+            <input type="text" id="editLeadLinkedin" class="form-control" placeholder="https://linkedin.com/company/…">
           </div>
         </div>
 
-        <!-- Tab 2: Contacts -->
-        <div id="tabContentContacts" class="edit-tab-content" style="display: none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <span style="font-size: 0.8rem; color: #a78bfa; font-weight: 700; text-transform: uppercase;">Key Decision Makers</span>
-            <button type="button" onclick="addModalContactRow()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4);">+ Add Person</button>
-          </div>
-          <div id="modalContactsList" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;"></div>
+        <div class="edit-dm-section-title edit-section-head">
+          <span>Business Phone Numbers</span>
+          <button type="button" onclick="addPhoneRow()" class="btn btn-secondary btn-sm">+ Add number</button>
         </div>
+        <div id="editPhonesContainer"><!-- phone rows injected by openEditModal() --></div>
 
-        <!-- Tab 3: Social Media -->
-        <div id="tabContentSocial" class="edit-tab-content" style="display: none;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div>
-              <label class="form-label">🔗 LinkedIn Company URL</label>
-              <input id="editSocialLinkedIn" type="text" class="form-control" placeholder="https://www.linkedin.com/company/...">
-            </div>
-            <div>
-              <label class="form-label">🐦 Twitter / X Profile</label>
-              <input id="editSocialTwitter" type="text" class="form-control" placeholder="https://x.com/...">
-            </div>
-            <div>
-              <label class="form-label">📘 Facebook Page</label>
-              <input id="editSocialFacebook" type="text" class="form-control" placeholder="https://facebook.com/...">
-            </div>
-            <div>
-              <label class="form-label">📸 Instagram / YouTube</label>
-              <input id="editSocialInstagram" type="text" class="form-control" placeholder="https://instagram.com/...">
-            </div>
+        <div class="edit-dm-section-title">Company Details</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Industry</label>
+            <input type="text" id="editLeadIndustry" class="form-control">
           </div>
-        </div>
-
-        <!-- Tab 4: Pitch & Battlecard -->
-        <div id="tabContentPitch" class="edit-tab-content" style="display: none;">
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🗣️ 30-Second Elevator Pitch Hook</label>
-            <textarea id="editPitchHook" class="form-control" rows="3" placeholder="SDR opening script..."></textarea>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Employees</label>
+            <input type="text" id="editLeadEmployees" class="form-control" placeholder="e.g. 11-50">
           </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🎯 Big Binary Tech Strategic Angle</label>
-            <textarea id="editPitchAngle" class="form-control" rows="2" placeholder="Why Big Binary Tech is the exact partner for them..."></textarea>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Propensity %</label>
+            <input type="number" id="editLeadScore" class="form-control" min="0" max="100">
           </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🚨 Operational Friction & Pain Points (1 per line)</label>
-            <textarea id="editPitchPainPoints" class="form-control" rows="3" placeholder="Enter pain points, one per line..."></textarea>
+          <div style="grid-column: 1 / -1;">
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Address</label>
+            <input type="text" id="editLeadAddress" class="form-control">
           </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🛡️ Objection Handlers (Key: Value or Notes)</label>
-            <textarea id="editPitchObjections" class="form-control" rows="3" placeholder="Notes or custom scripts..."></textarea>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Category</label>
+            <select id="editLeadCategory" class="form-control">
+              <option value="NEW_IMPLEMENTATION">New Implementation</option>
+              <option value="BPO_RESCUE">Odoo BPO / Rescue</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Call Status</label>
+            <input type="text" id="editLeadCallStatus" class="form-control" readonly style="opacity:0.7;">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Follow-up date</label>
+            <input type="date" id="editLeadFollowUp" class="form-control">
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Current ERP / Tech stack (comma-separated)</label>
+            <input type="text" id="editLeadTech" class="form-control" placeholder="QuickBooks, Shopify…">
           </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem; margin-top: 1rem;">
-          <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Cancel</button>
-          <button type="submit" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Changes</button>
+        <div style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Notes / Call history (editable — full log)</label>
+          <textarea id="editLeadNotes" class="form-control" rows="4" placeholder="Timestamped call notes accumulate here…"></textarea>
+        </div>
+
+        <div style="margin-bottom: 0.75rem;">
+          <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Diagnostic Elevator Opener</label>
+          <textarea id="editLeadOpener" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="edit-dm-section-title edit-section-head">
+          <span>Decision Makers — name, title, cell, email, LinkedIn</span>
+          <button type="button" onclick="openAddPersonModal()" class="btn btn-secondary btn-sm">+ Add Person</button>
+        </div>
+        <div id="editDmContainer"><!-- DM edit rows injected by openEditModal() --></div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+          <button type="button" onclick="closeEditModal()" class="btn btn-secondary btn-sm">Cancel</button>
+          <button type="submit" id="editSaveBtn" class="btn btn-primary btn-sm">Save Changes</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Live Web Tech Audit Modal -->
-  <div id="liveAuditModal" class="modal-overlay" style="display: none; z-index: 10000;">
-    <div class="modal-content" style="max-width: 860px; max-height: 90vh; overflow-y: auto; background: #0b1329; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
-        <div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 1.4rem;">⚡</span>
-            <h2 id="auditModalTitle" style="font-size: 1.3rem; font-weight: 800; color: #fbbf24; margin: 0;">Live Web Tech Audit</h2>
-          </div>
-          <p id="auditModalSubtitle" style="font-size: 0.8rem; color: #94a3b8; margin: 0.25rem 0 0 0;">Real-time website technographic scan — load time, tech stack, security, update year</p>
-        </div>
-        <button onclick="closeLiveAuditModal()" style="background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer;">&times;</button>
+  <!-- Add Person Modal (quick decision-maker capture) -->
+  <div id="addPersonModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card" style="max-width: 460px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.1rem; font-weight: 800; color: #ffffff;">Add Person</h3>
+        <button onclick="closeAddPersonModal()" class="btn btn-secondary btn-sm">✕</button>
       </div>
-
-      <!-- Diagnostic Grid -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
-        <!-- Left: Web Tech Metrics -->
-        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 1rem;">
-          <div style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span>🌐</span> Website Health & Infrastructure
+      <form id="addPersonForm" onsubmit="saveNewPerson(event)">
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Full name *</label>
+            <input type="text" id="addPersonName" class="form-control" placeholder="Jane Doe" required>
           </div>
-          <div id="auditTechMetrics" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem;">
-            <!-- Rendered by JS -->
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Title / Role</label>
+            <input type="text" id="addPersonTitle" class="form-control" placeholder="CEO, COO, Founder…">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">LinkedIn URL</label>
+            <input type="text" id="addPersonLinkedin" class="form-control" placeholder="https://linkedin.com/in/…">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Direct phone / cell</label>
+            <input type="text" id="addPersonPhone" class="form-control" placeholder="+1 555 123 4567">
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.72rem; color: #94a3b8;">Email</label>
+            <input type="text" id="addPersonEmail" class="form-control" placeholder="jane@company.com">
           </div>
         </div>
-
-        <!-- Right: New Signals Checklist -->
-        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 1rem;">
-          <div style="font-size: 0.8rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span>📋</span> New Signals — Select to Add to Battlecard
-          </div>
-          <div id="auditNewFindings" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.825rem; max-height: 220px; overflow-y: auto;">
-            <!-- Rendered by JS -->
-          </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" onclick="closeAddPersonModal()" class="btn btn-secondary btn-sm">Cancel</button>
+          <button type="submit" id="addPersonSaveBtn" class="btn btn-primary btn-sm">Save Person</button>
         </div>
-      </div>
-
-      <!-- Re-synthesized Pitch Hook Preview -->
-      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
-        <div style="font-size: 0.8rem; font-weight: 700; color: #34d399; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
-          <span>🎯</span> Re-Synthesized Consultative Pitch
-        </div>
-        <div id="auditPitchPreview" style="font-size: 0.875rem; color: #f1f5f9; line-height: 1.5; font-style: italic; background: rgba(0,0,0,0.3); padding: 0.75rem 1rem; border-radius: 6px; border-left: 3px solid #10b981;">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-
-      <!-- Action Footer -->
-      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem;">
-        <span style="font-size: 0.75rem; color: #64748b;">AI-enriched profile data is never overwritten — only checked signals are merged</span>
-        <div style="display: flex; gap: 0.75rem;">
-          <button type="button" onclick="closeLiveAuditModal()" class="btn btn-secondary">Ignore All</button>
-          <button type="button" onclick="applyLiveAuditFindings()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;">
-            Apply Selected to Battlecard
-          </button>
-        </div>
-      </div>
+      </form>
     </div>
   </div>
 
   <script src="js/caller.js"></script>
 </body>
+
 </html>

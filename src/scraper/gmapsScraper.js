@@ -4,6 +4,7 @@ const { findDecisionMakers } = require('../auditor/decisionMakerFinder');
 const { deepResearch } = require('../auditor/deepResearcher');
 const { scoreLead } = require('../ml/propensityScorer');
 const { generateBattlecard } = require('../pitch/battlecardGenerator');
+const { cleanWebsite } = require('../utils/cleanWebsite');
 const { analyzeFrictionWithNLI, generateReviewDossier } = require('../ml/reviewIntelligence');
 const { computeCaseStudyFit } = require('../ml/caseStudyEmbedder');
 const db = require('../db/database');
@@ -257,15 +258,8 @@ async function scrapeGoogleMaps(query, location = '', maxResults = 10, onProgres
         }
       }
 
-      // If website is Google redirect or adurl, resolve it
-      if (realWebsite && (realWebsite.includes('google.com/url') || realWebsite.includes('adurl='))) {
-        try {
-          const match = realWebsite.match(/[?&](?:q|adurl)=([^&]+)/);
-          if (match && match[1]) {
-            realWebsite = decodeURIComponent(match[1]);
-          }
-        } catch (e) {}
-      }
+      // Unwrap Google redirect wrappers (/aclk, /url, adurl=) → real destination
+      realWebsite = cleanWebsite(realWebsite);
 
       // 6. Live Technographic & Web Health Audit
       let audit = {

@@ -254,10 +254,16 @@ async function searchOpenCorporates(companyName) {
 // ─── Dual-Engine Lowest Reviews Dataset Scraper ───────────────────────────────
 
 /**
- * Scrapes Google Maps reviews filtered by "Lowest rating" using Puppeteer with semantic ARIA sort,
- * true step-by-step infinite scroll (loading 20-50 reviews), and strict data-review-id targeting.
+ * Scrapes Google Maps reviews sorted by "Lowest rating".
+ * Delegates to the dedicated, verified scraper module (kept as a thin wrapper so
+ * existing callers/signatures continue to work).
  */
 async function scrapeGoogleMapsLowestReviews(companyName, location, browser) {
+  const { scrapeLowestReviews } = require('../scraper/googleMapsReviews');
+  return scrapeLowestReviews(companyName, location, { browser, max: 35 });
+}
+
+async function _legacyScrapeGoogleMapsLowestReviews(companyName, location, browser) {
   if (!browser) return [];
   let page = null;
   try {

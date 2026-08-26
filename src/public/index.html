@@ -1,453 +1,413 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Big Binary Tech - Lead Intelligence Engine</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
 </head>
+
 <body>
-  <!-- Header -->
+  <!-- Top Navigation Header (Matching Slide 1) -->
   <header class="navbar">
     <div class="brand">
-      <img src="images/logo.png" alt="Big Binary Tech Logo" class="brand-logo-img">
+      <img src="images/logo.png" alt="Big Binary Tech" class="brand-badge-icon">
       <div class="brand-text">
         <h1>BIG BINARY <span class="tech-tag">TECH</span></h1>
         <span class="sub-title">Lead Intelligence & ML Propensity Engine</span>
       </div>
     </div>
-    <div class="nav-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-      <a href="caller.html" class="btn btn-accent">📞 Open SDR Caller View</a>
-      <button id="batchClayBtn" onclick="pushTopTierLeadsToClay()" class="btn btn-secondary" style="color: #60a5fa; border-color: rgba(96,165,250,0.4); font-weight: 700;" title="Dispatches Top Tier (≥85%) Leads to Clay Waterfall">🧊 Push Tier-1 to Clay</button>
-      <button id="syncClayCsvBtn" onclick="document.getElementById('clayCsvFileInput').click()" class="btn btn-secondary" style="color: #34d399; border-color: rgba(52,211,153,0.4); font-weight: 700;" title="Upload downloaded Clay CSV to update verified emails and cell phones in 1 click">🔄 Sync from Clay CSV</button>
-      <input id="clayCsvFileInput" type="file" accept=".csv" style="display: none;" onchange="handleClayCsvUpload(event)">
-      <button id="claySettingsBtn" onclick="openClayConfigModal()" class="btn btn-secondary btn-sm" title="Configure Clay Webhook">⚙️ Clay Setup</button>
-      <button id="exportCsvBtn" class="btn btn-secondary">📥 Export CSV</button>
-      <button id="clearLeadsBtn" class="btn btn-secondary btn-sm" style="color: #fb7185;">🗑️ Clear Data</button>
+
+    <!-- Navigation Pills -->
+    <div class="nav-pills">
+      <button class="nav-pill-btn active" id="navTabDashboard" onclick="switchNavTab('dashboard')">
+        Dashboard</button>
+      <button class="nav-pill-btn" id="navTabLeads" onclick="switchNavTab('leads')">Leads</button>
+      <button class="nav-pill-btn" id="navTabPipeline" onclick="openPipelineModal()">Architecture</button>
+      <button class="nav-pill-btn" id="navTabRoi" onclick="openRoiModal()">Impact & ROI</button>
+      <a href="caller.html" class="nav-pill-btn" style="color: #3b82f6; font-weight: 700;">SDR Workspace</a>
+    </div>
+
+    <!-- Nav Actions -->
+    <div class="nav-actions">
+      <button id="batchClayBtn" onclick="pushTopTierLeadsToClay()" class="btn btn-secondary btn-sm"
+        style="color: #60a5fa; border-color: rgba(96,165,250,0.35);"
+        title="Dispatches Top Tier (≥85%) Leads to Clay Waterfall">Push to Clay</button>
+      <button id="syncClayCsvBtn" onclick="document.getElementById('clayCsvFileInput').click()"
+        class="btn btn-secondary btn-sm" style="color: #34d399; border-color: rgba(52,211,153,0.35);"
+        title="Sync Clay Enriched CSV">Sync CSV</button>
+      <input id="clayCsvFileInput" type="file" accept=".csv" style="display: none;"
+        onchange="handleClayCsvUpload(event)">
+      <button id="claySettingsBtn" onclick="openClayConfigModal()" class="btn btn-secondary btn-sm"
+        title="Configure Clay Webhook">Clay</button>
+      <button id="exportCsvBtn" class="btn btn-secondary btn-sm">Export</button>
+      <button id="clearLeadsBtn" class="btn btn-secondary btn-sm"
+        style="color: #fb7185; border-color: rgba(251,113,133,0.3);">Clear</button>
     </div>
   </header>
 
-  <!-- Main Content -->
+  <!-- Main Container -->
   <main class="container">
-    <!-- Stat Cards Grid -->
-    <section class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-header">Total Leads in Database</div>
-        <div class="stat-value" id="statTotalLeads" style="color: #6366f1;">0</div>
-        <div class="stat-footer">Stored locally in JSON flat-file</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-header">Odoo BPO / Rescue Leads</div>
-        <div class="stat-value" id="statBpoRescues" style="color: #c084fc;">0</div>
-        <div class="stat-footer">High-ticket 11–200 employee size</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-header">New Implementations</div>
-        <div class="stat-value" id="statNewImpl" style="color: #38bdf8;">0</div>
-        <div class="stat-footer">Legacy web & spreadsheet users</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-header">High Conversion Fit (≥75%)</div>
-        <div class="stat-value" id="statHighFit" style="color: #34d399;">0</div>
-        <div class="stat-footer">PRISM ML Propensity Score</div>
-      </div>
-    </section>
 
-    <!-- Scraper Control Panels -->
-    <section class="scraper-grid">
-      <!-- Panel 1: Google Maps / Local Scraper -->
-      <div class="panel">
-        <div class="panel-title">
-          <span>📍</span> Pipeline A: Google Maps Discovery (New Implementations)
+    <!-- Scraper Control & Discovery Hub -->
+    <section class="dashboard-panel" style="margin-bottom: 2rem;">
+      <div class="panel-header-row">
+        <div class="panel-heading">
+          Autonomous Discovery &amp; Technographic Auditor
         </div>
-        <div class="panel-desc">Search high-ticket local industries (Contractors, Healthcare, Wholesale) and audit their digital gaps.</div>
-        
-        <form id="gmapsForm">
-          <div class="form-row">
-            <div class="form-group" style="flex: 2;">
-              <label class="form-label">Target Industry / Keyword</label>
-              <input type="text" id="gmapsQuery" class="form-control" placeholder="e.g. Commercial Roofing, Dental Clinics, Wholesalers" value="Commercial Roofing Contractors" required>
-            </div>
-            <div class="form-group" style="flex: 1.5;">
-              <label class="form-label">City / Region</label>
-              <input type="text" id="gmapsLocation" class="form-control" placeholder="e.g. Dallas, TX or Dubai" value="Dallas, TX" required>
-            </div>
-            <div class="form-group" style="flex: 0.8;">
-              <label class="form-label">Count</label>
-              <input type="number" id="gmapsMax" class="form-control" value="15" min="1" max="500">
-            </div>
+      </div>
+
+      <!-- Scraper Form Grid -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+        <!-- Pipeline A: Google Maps Discovery -->
+        <div
+          style="background: var(--bg-secondary); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.9rem; font-weight: 800; color: #60a5fa; margin-bottom: 0.3rem;">
+            Pipeline A: Google Maps Local Discovery
           </div>
-          <button type="submit" id="startGmapsBtn" class="btn btn-primary" style="width: 100%;">
-            🚀 Start Discovery & Technographic Audit
-          </button>
-        </form>
-      </div>
-
-      <!-- Panel 2: Odoo BPO / Rescue Scraper -->
-      <div class="panel">
-        <div class="panel-title">
-          <span>🛡️</span> Pipeline B: Odoo Customer Rescue & BPO Mining
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.85rem;">
+            Scrape high-ticket contractors, medical clinics, and local services with full technographic audits.
+          </div>
+          <form id="gmapsForm">
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <input type="text" id="gmapsQuery" class="form-control"
+                placeholder="Target Industry (e.g. Commercial Roofing)" value="Commercial Roofing Contractors" required>
+              <input type="text" id="gmapsLocation" class="form-control" placeholder="Location (e.g. Dallas, TX)"
+                value="Dallas, TX" required style="width: 140px;">
+              <input type="number" id="gmapsMax" class="form-control" value="15" min="1" max="100" style="width: 70px;">
+            </div>
+            <button type="submit" id="startGmapsBtn" class="btn btn-primary" style="width: 100%;">
+              Start Maps Discovery &amp; Review NLP
+            </button>
+          </form>
         </div>
-        <div class="panel-desc">Discover active Odoo users (11–200 size) to pitch 24/7 BPO support, maintenance & v18 upgrades.</div>
-        
-        <form id="odooForm">
-          <div class="form-row">
-            <div class="form-group" style="flex: 2;">
-              <label class="form-label">Target Region</label>
+
+        <!-- Pipeline B: Odoo Customer Rescue -->
+        <div
+          style="background: var(--bg-secondary); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.9rem; font-weight: 800; color: #818cf8; margin-bottom: 0.3rem;">
+            Pipeline B: Odoo Customer Rescue &amp; BPO Mining
+          </div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.85rem;">
+            Mine verified enterprise Odoo users (11–200 size) to pitch 24/7 BPO support, maintenance &amp; v18 upgrades.
+          </div>
+          <form id="odooForm">
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
               <select id="odooRegion" class="form-control">
-                <option value="north america">🇺🇸 North America (USA)</option>
-                <option value="canada">🇨🇦 Canada</option>
-                <option value="uk">🇬🇧 United Kingdom</option>
-                <option value="australia">🇦🇺 Australia</option>
-                <option value="germany">🇩🇪 Germany</option>
-                <option value="france">🇫🇷 France</option>
-                <option value="uae">🇦🇪 UAE / Middle East</option>
-                <option value="gcc">🌍 GCC Region</option>
+                <option value="north america">North America (USA)</option>
+                <option value="united kingdom">United Kingdom</option>
+                <option value="gcc">GCC (Saudi Arabia & UAE)</option>
+                <option value="europe">Europe</option>
               </select>
+              <input type="number" id="odooMax" class="form-control" value="15" min="1" max="100" style="width: 70px;">
             </div>
-            <div class="form-group" style="flex: 1.5;">
-              <label class="form-label">Target Industry</label>
-              <select id="odooIndustry" class="form-control">
-                <option value="All">All High-Ticket Niches</option>
-                <option value="Wholesale & Distribution">Wholesale & Distribution</option>
-                <option value="Healthcare & Medical Devices">Healthcare & Medical Devices</option>
-                <option value="Construction & Field">Construction & Field</option>
-                <option value="Manufacturing">Manufacturing</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex: 0.8;">
-              <label class="form-label">Count</label>
-              <input type="number" id="odooMax" class="form-control" value="20" min="1" max="500">
-            </div>
-          </div>
-          <button type="submit" id="startOdooBtn" class="btn btn-secondary" style="width: 100%; border-color: var(--accent-purple); color: #c084fc;">
-            ⚡ Mine Odoo BPO / Rescue Opportunities
-          </button>
-        </form>
+            <button type="submit" id="startOdooBtn" class="btn btn-purple" style="width: 100%;">
+              Start Odoo Mining &amp; Dual Reverse-Search
+            </button>
+          </form>
+        </div>
       </div>
     </section>
 
-    <!-- Live Terminal Status -->
-    <div id="terminalContainer" style="display: none; margin-bottom: 1.5rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
-        <span style="font-size: 0.75rem; color: #38bdf8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
-          ⚡ Live Scraping & Audit Pipeline Activity
-        </span>
-        <span id="jobBadge" class="badge badge-new">IDLE</span>
+    <!-- Top KPI Cards Grid with Glowing Wave Area Charts (Matching Slide 1) -->
+    <section class="hero-stats-grid">
+      <!-- 1. Total Leads -->
+      <div class="hero-stat-card">
+        <div class="stat-top-row">
+          <span class="stat-label">Total Leads</span>
+          <span class="stat-trend-badge trend-cyan">+12% ↗</span>
+        </div>
+        <div class="hero-stat-value" id="statTotalLeads">1,245</div>
+        <div class="stat-wave-container">
+          <svg viewBox="0 0 240 60" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="cyanWaveGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path d="M0,45 C40,48 70,25 110,30 C150,35 180,10 240,25 L240,60 L0,60 Z" fill="url(#cyanWaveGrad)" />
+            <path d="M0,45 C40,48 70,25 110,30 C150,35 180,10 240,25" fill="none" stroke="#3b82f6" stroke-width="2.5" />
+            <!-- Apex Pulse Beacon -->
+            <circle cx="180" cy="10" r="4" fill="#3b82f6" filter="drop-shadow(0 0 6px #3b82f6)" />
+          </svg>
+        </div>
       </div>
-      <div id="terminalBox" class="terminal-box"></div>
-    </div>
 
-    <!-- Lead Filters & Table -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label class="form-label" style="margin-bottom:0;">Category:</label>
+      <!-- 2. Qualified Opportunities -->
+      <div class="hero-stat-card">
+        <div class="stat-top-row">
+          <span class="stat-label">Qualified Opportunities</span>
+          <span class="stat-trend-badge trend-up">+8% ↗</span>
+        </div>
+        <div class="hero-stat-value" id="statHighFit">382</div>
+        <div class="stat-wave-container">
+          <svg viewBox="0 0 240 60" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="greenWaveGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path d="M0,50 C50,55 90,30 140,28 C190,26 210,12 240,18 L240,60 L0,60 Z" fill="url(#greenWaveGrad)" />
+            <path d="M0,50 C50,55 90,30 140,28 C190,26 210,12 240,18" fill="none" stroke="#10b981" stroke-width="2.5" />
+            <circle cx="210" cy="12" r="4" fill="#10b981" filter="drop-shadow(0 0 6px #10b981)" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 3. Pipeline Value -->
+      <div class="hero-stat-card">
+        <div class="stat-top-row">
+          <span class="stat-label">Pipeline Value</span>
+          <span class="stat-trend-badge trend-purple">+15% ↗</span>
+        </div>
+        <div class="hero-stat-value" id="statPipelineVal">$1.5M</div>
+        <div class="stat-wave-container">
+          <svg viewBox="0 0 240 60" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="purpleWaveGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#6366f1" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path d="M0,52 C60,40 100,50 150,22 C190,5 210,25 240,12 L240,60 L0,60 Z" fill="url(#purpleWaveGrad)" />
+            <path d="M0,52 C60,40 100,50 150,22 C190,5 210,25 240,12" fill="none" stroke="#6366f1" stroke-width="2.5" />
+            <circle cx="190" cy="5" r="4" fill="#6366f1" filter="drop-shadow(0 0 6px #6366f1)" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 4. Sales Funnel (Matching Slide 1) -->
+      <div class="hero-stat-card">
+        <div class="stat-top-row">
+          <span class="stat-label">Sales Funnel</span>
+          <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">Conversion Stage</span>
+        </div>
+        <div class="sales-funnel-list">
+          <div class="funnel-item">
+            <div class="funnel-meta">
+              <span>Discovery</span>
+              <span id="funnelDiscoveryCount">150</span>
+            </div>
+            <div class="funnel-bar-bg">
+              <div class="funnel-bar-fill bar-cyan" style="width: 100%;"></div>
+            </div>
+          </div>
+          <div class="funnel-item">
+            <div class="funnel-meta">
+              <span>Qualification</span>
+              <span id="funnelQualCount">90</span>
+            </div>
+            <div class="funnel-bar-bg">
+              <div class="funnel-bar-fill bar-teal" style="width: 60%;"></div>
+            </div>
+          </div>
+          <div class="funnel-item">
+            <div class="funnel-meta">
+              <span>Proposal</span>
+              <span id="funnelProposalCount">45</span>
+            </div>
+            <div class="funnel-bar-bg">
+              <div class="funnel-bar-fill bar-purple" style="width: 30%;"></div>
+            </div>
+          </div>
+          <div class="funnel-item">
+            <div class="funnel-meta">
+              <span>Won</span>
+              <span id="funnelWonCount">12</span>
+            </div>
+            <div class="funnel-bar-bg">
+              <div class="funnel-bar-fill bar-green" style="width: 10%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Leads Command Center: Search on top, then table -->
+    <section class="dashboard-panel" style="margin-bottom: 2rem;">
+      <!-- Search + Filters Toolbar (Very Top) -->
+      <div class="leads-toolbar">
+        <input type="text" id="searchInput" class="form-control leads-search"
+          placeholder="AI Semantic Search: e.g. 'construction with bad reviews'...">
         <select id="filterCategory" class="form-control" style="width: auto;">
           <option value="ALL">All Categories</option>
           <option value="NEW_IMPLEMENTATION">New Implementation</option>
           <option value="BPO_RESCUE">Odoo BPO / Rescue</option>
         </select>
-      </div>
-
-      <div class="filter-group">
-        <label class="form-label" style="margin-bottom:0;">Min Propensity:</label>
         <select id="filterMinScore" class="form-control" style="width: auto;">
-          <option value="0">All Scores (0%+)</option>
-          <option value="75">High Fit Only (≥ 75%)</option>
-          <option value="85">Top Tier (≥ 85%)</option>
+          <option value="0">Min Propensity</option>
+          <option value="75">High Fit (≥75%)</option>
+          <option value="85">Top Tier (≥85%)</option>
         </select>
-      </div>
-
-      <div class="filter-group">
-        <label class="form-label" style="margin-bottom:0;">Call Status:</label>
         <select id="filterCallStatus" class="form-control" style="width: auto;">
-          <option value="ALL">All Statuses</option>
-          <option value="Interested">✅ Interested</option>
-          <option value="Callback Requested">📅 Callback Requested</option>
-          <option value="FOLLOW_UPS_DUE">⏰ Follow-Ups Scheduled</option>
-          <option value="Not a Fit">❌ Not a Fit</option>
-          <option value="No Answer / Voicemail">📵 No Answer / Voicemail</option>
-          <option value="Uncalled">⚪ Uncalled Only</option>
+          <option value="ALL">All Call Statuses</option>
+          <option value="UNCALLED">Uncalled Leads</option>
+          <option value="Interested">Interested</option>
+          <option value="FOLLOW_UPS_DUE">Follow-ups Due</option>
         </select>
+        <select id="leadSortFilter" class="form-control" style="width: auto;">
+          <option value="highest_fit">Sort: Highest Fit</option>
+          <option value="recent">Sort: Most Recent</option>
+          <option value="bpo">Filter: BPO Rescue</option>
+          <option value="gmaps">Filter: Google Maps</option>
+        </select>
+        <button onclick="toggleViewMode()" id="viewModeToggleBtn" class="btn btn-secondary btn-sm"
+          title="Toggle Grid / Table View">Cards View</button>
       </div>
 
-
-      <div class="filter-group" style="flex-grow: 1; max-width: 520px; display: flex; gap: 0.4rem;">
-        <input type="text" id="searchInput" class="form-control" placeholder="🧠 AI Semantic Search (e.g. 'construction in Texas', 'manufacturing')...">
-        <button id="aiSearchBtn" onclick="triggerAISearch()" class="btn btn-accent" style="white-space: nowrap; font-weight: 700; padding: 0.5rem 1rem;">🔍 AI Search</button>
-        <button onclick="mineNewFromSearch()" class="btn btn-primary" style="white-space: nowrap; font-weight: 700; padding: 0.5rem 1rem;" title="Use this query to mine new leads from Google Maps">⛏️ Mine New</button>
-        <button onclick="clearSearch()" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 0.75rem;" title="Reset search">✕</button>
+      <div class="panel-header-row" style="margin-top: 1.25rem; margin-bottom: 1rem;">
+        <div class="panel-heading">
+          <span></span> Active Leads
+        </div>
+        <span style="font-size: 0.72rem; color: #94a3b8;">Click ★ to flag a lead — flags &amp; call outcomes are
+          remembered</span>
       </div>
-    </div>
 
-    <!-- Table Container -->
-    <div class="table-container">
-      <table class="leads-table">
-        <thead>
-          <tr>
-            <th>Company Name</th>
-            <th>Category</th>
-            <th>ML Success %</th>
-            <th>Industry / Location</th>
-            <th>Contact & Web</th>
-            <th>Tech Stack Footprint</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="leadsTableBody">
-          <tr>
-            <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-dim);">
-              No leads in database. Start a scrape above to discover opportunities!
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <!-- Dense Table View (Primary) -->
+      <div class="table-container" id="leadsTableContainer">
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">★</th>
+              <th>Company</th>
+              <th>Category</th>
+              <th>Propensity</th>
+              <th>Phone</th>
+              <th>Decision Maker</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody">
+            <!-- Populated dynamically by app.js -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Ranked Cards Grid View (Toggle) -->
+      <div class="active-leads-grid" id="activeLeadsGrid" style="display: none;">
+        <!-- Populated dynamically by app.js -->
+      </div>
+    </section>
+
+
   </main>
 
-  <!-- Lead Detail & Battlecard Modal -->
-  <div id="leadModal" class="modal-backdrop">
-    <div class="modal-content">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-        <div>
-          <h2 id="modalCompanyName" style="font-size: 1.35rem; font-weight: 800;">Company Name</h2>
-          <div id="modalMeta" style="font-size: 0.825rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
-        </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button id="modalClayPushBtn" onclick="pushCurrentLeadToClay()" class="btn btn-secondary btn-sm" style="color: #60a5fa; border-color: rgba(96,165,250,0.4); font-weight: 700;">🧊 Push to Clay</button>
-          <button id="modalAiEnrichBtn" onclick="runLeadAiEnrich()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4); font-weight: 700;">✨ AI Auto-Enrich</button>
-          <button onclick="openDashboardEditModal()" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56,189,248,0.4); font-weight: 700;">✏️ Edit Details & Pitch</button>
-          <button id="closeModalBtn" class="btn btn-secondary btn-sm">✕ Close</button>
-        </div>
+  <!-- Slide 2 Modal: Full-Stack Autonomous Architecture & Data Pipeline -->
+  <div id="pipelineModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 900; color: #ffffff;">Full-Stack Autonomous Architecture & Data
+          Pipeline</h2>
+        <button onclick="closePipelineModal()" class="btn btn-secondary btn-sm">✕ Close</button>
       </div>
-
-      <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
-        <div id="modalCategoryBadge"></div>
-        <div id="modalScorePill"></div>
-        <div id="modalSizeBadge"></div>
-      </div>
-
-      <div id="modalDecisionMakersSection" style="margin-bottom: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h4 style="font-size: 0.8rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">👤 Decision Makers Found</h4>
-          <button onclick="toggleModalAddContact()" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.4); color: #a78bfa; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.7rem; cursor: pointer; font-weight: 700;">+ Add Contact</button>
-        </div>
-        <div id="modalDecisionMakers" style="display: flex; flex-wrap: wrap; gap: 0.6rem;"></div>
-        <!-- Inline add-contact form -->
-        <div id="modalAddContactForm" style="display: none; margin-top: 0.65rem; background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.2); border-radius: 8px; padding: 0.75rem 0.9rem;">
-          <div style="font-size: 0.7rem; color: #a78bfa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Add Contact Manually</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-bottom: 0.45rem;">
-            <input id="modalNewContactName"     type="text" placeholder="Full Name *"          class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
-            <input id="modalNewContactTitle"    type="text" placeholder="Title / Role"         class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
-            <input id="modalNewContactEmail"    type="text" placeholder="Email (optional)"     class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
-            <input id="modalNewContactLinkedIn" type="text" placeholder="LinkedIn URL (optional)" class="form-control" style="font-size: 0.78rem; padding: 0.35rem 0.6rem;">
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; text-align: center;">
+        <div
+          style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-size: 1.8rem; margin-bottom: 0.4rem;"></div>
+          <div style="font-size: 0.8rem; font-weight: 800; color: #3b82f6; margin-bottom: 0.3rem;">1. Discovery Layer
           </div>
-          <div style="display: flex; gap: 0.4rem;">
-            <button onclick="saveModalContact()" class="btn btn-accent" style="font-size: 0.75rem; padding: 0.3rem 0.75rem;">Save</button>
-            <button onclick="toggleModalAddContact()" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.75rem;">Cancel</button>
+          <div style="font-size: 0.72rem; color: #cbd5e1;">Google Maps GMB Scraper + Odoo Customer Directory Miner</div>
+        </div>
+        <div
+          style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-size: 1.8rem; margin-bottom: 0.4rem;"></div>
+          <div style="font-size: 0.8rem; font-weight: 800; color: #6366f1; margin-bottom: 0.3rem;">2. Persona Unmasking
           </div>
+          <div style="font-size: 0.72rem; color: #cbd5e1;">8 Buyer Personas (CFO, COO, CTO) + Reverse Search</div>
         </div>
-      </div>
-
-      <!-- Pre-Call Intelligence Dossier -->
-      <div id="modalIntelSection" style="display: none; margin-bottom: 1rem; background: rgba(10, 185, 129, 0.07); border: 1px solid rgba(10, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1.15rem;">
-        <div style="font-size: 0.75rem; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">🔍 Pre-Call Intelligence Dossier</div>
-        <div id="modalIntelGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;"></div>
-        <div id="modalIntelNewsRow" style="display: none; margin-top: 0.5rem; padding: 0.45rem 0.7rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.78rem; color: #94a3b8;">
-          <span style="color: #f59e0b; font-weight: 700;">📰 Latest News:</span>
-          <span id="modalIntelNewsHeadline"></span>
+        <div
+          style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-size: 1.8rem; margin-bottom: 0.4rem;"></div>
+          <div style="font-size: 0.8rem; font-weight: 800; color: #10b981; margin-bottom: 0.3rem;">3. On-Device ML & NLP
+          </div>
+          <div style="font-size: 0.72rem; color: #cbd5e1;">@xenova/transformers NLI Friction Classifier + PRISM
+            Propensity Scorer</div>
         </div>
-        <div id="modalIntelYelpRow" style="display: none; margin-top: 0.45rem; padding: 0.45rem 0.7rem; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.78rem; color: #94a3b8; font-style: italic; line-height: 1.4;">
-          <span style="color: #f43f5e; font-weight: 700; font-style: normal;">⭐ Yelp Voice:</span>
-          <span id="modalIntelYelpSnippet"></span>
+        <div
+          style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-size: 1.8rem; margin-bottom: 0.4rem;"></div>
+          <div style="font-size: 0.8rem; font-weight: 800; color: #f59e0b; margin-bottom: 0.3rem;">4. SDR Battlecard
+          </div>
+          <div style="font-size: 0.72rem; color: #cbd5e1;">Diagnostic Openers + Quantified Financial Leak
+            ($45K–$240K/yr)</div>
         </div>
-      </div>
-
-      <!-- AI Review Audit Dossier & Case Study Match -->
-      <div id="modalDossierSection" style="margin-bottom: 1rem; display: none; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1.15rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-          <span style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em;">
-            🧠 Hugging Face Review Dossier & NLI Friction
-          </span>
-          <span id="modalSemanticFitBadge" class="score-pill score-high" style="font-size: 0.725rem;">--</span>
+        <div
+          style="background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-size: 1.8rem; margin-bottom: 0.4rem;"></div>
+          <div style="font-size: 0.8rem; font-weight: 800; color: #60a5fa; margin-bottom: 0.3rem;">5. Cloud & Clay Sync
+          </div>
+          <div style="font-size: 0.72rem; color: #cbd5e1;">MongoDB Atlas Cloud Resilience + Clay.com Waterfall Webhook
+            Sync</div>
         </div>
-        <p id="modalDossierText" style="font-size: 0.85rem; line-height: 1.5; color: #ffffff;"></p>
-      </div>
-
-      <div style="margin-bottom: 1rem;">
-        <h4 style="font-size: 0.8rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.35rem;">Problem Analysis & Tech Gaps</h4>
-        <ul id="modalProblemList" class="problem-list"></ul>
-      </div>
-
-      <div style="margin-bottom: 1rem;">
-        <h4 style="font-size: 0.8rem; color: #818cf8; text-transform: uppercase; margin-bottom: 0.35rem;">30-Second Cold Call Elevator Hook</h4>
-        <div id="modalOpener" class="script-box"></div>
-      </div>
-
-      <div style="margin-bottom: 1rem;">
-        <h4 style="font-size: 0.8rem; color: #34d399; text-transform: uppercase; margin-bottom: 0.35rem;">Target Offer for Big Binary Tech</h4>
-        <div id="modalOffer" style="font-size: 0.875rem; background: rgba(16, 185, 129, 0.1); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);"></div>
-      </div>
-
-      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-        <a id="modalCallerLink" href="caller.html" class="btn btn-accent">📞 Call This Lead Now</a>
       </div>
     </div>
   </div>
 
-  <!-- Dashboard Full Company & Pitch Edit Modal -->
-  <div id="dashboardEditModal" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1100; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div class="modal-content" style="max-width: 840px; width: 95%; max-height: 90vh; overflow-y: auto; background: #0c1427; border: 1px solid rgba(56,189,248,0.25); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.25rem;">
-        <div>
-          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-            ✏️ Edit Company Details & Pitch
-          </h3>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">Modify profile, decision makers, social channels, and pitch hooks</span>
-        </div>
-        <button onclick="closeDashboardEditModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
+  <!-- Slide 4 Modal: Measurable Business Impact & ROI -->
+  <div id="roiModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 900; color: #ffffff;">Measurable Business Impact & ROI</h2>
+        <button onclick="closeRoiModal()" class="btn btn-secondary btn-sm">✕ Close</button>
       </div>
-
-      <!-- Navigation Tabs -->
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; flex-wrap: wrap;">
-        <button id="dashTabBtnProfile" type="button" class="btn btn-sm btn-accent" onclick="switchDashboardEditTab('profile')">🏢 Company Profile</button>
-        <button id="dashTabBtnContacts" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('contacts')">👥 Decision Makers</button>
-        <button id="dashTabBtnSocial" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('social')">🌐 Social Media</button>
-        <button id="dashTabBtnPitch" type="button" class="btn btn-sm btn-secondary" onclick="switchDashboardEditTab('pitch')">🎙️ Odoo Pitch & Battlecard</button>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
+        <div
+          style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-md); padding: 1.5rem 1rem; box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);">
+          <div style="font-size: 2.4rem; font-weight: 900; color: #34d399; margin-bottom: 0.25rem;">100%</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #ffffff; margin-bottom: 0.4rem;">Zero API Cost</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">Replaced $1,800/mo Apollo/ZoomInfo subscriptions with
+            autonomous scraper.</div>
+        </div>
+        <div
+          style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: var(--radius-md); padding: 1.5rem 1rem; box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);">
+          <div style="font-size: 2.4rem; font-weight: 900; color: #3b82f6; margin-bottom: 0.25rem;">10x</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #ffffff; margin-bottom: 0.4rem;">Calling Velocity</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">Keyboard-driven SDR portal with 1-click persona shifts and
+            instant call logging.</div>
+        </div>
+        <div
+          style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 1.5rem 1rem; box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);">
+          <div style="font-size: 2.4rem; font-weight: 900; color: #fbbf24; margin-bottom: 0.25rem;">400+</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #ffffff; margin-bottom: 0.4rem;">Qualified Leads/hr
+          </div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">Autonomous On-Device NLP & Puppeteer scraper clusters running
+            continuously.</div>
+        </div>
+        <div
+          style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: var(--radius-md); padding: 1.5rem 1rem; box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);">
+          <div style="font-size: 2.4rem; font-weight: 900; color: #818cf8; margin-bottom: 0.25rem;">38%</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #ffffff; margin-bottom: 0.4rem;">Higher Conversion</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">Diagnostic battlecards with quantified annual leak metrics
+            replace generic cold pitches.</div>
+        </div>
       </div>
-
-      <!-- Form Content -->
-      <form id="dashboardEditForm" onsubmit="event.preventDefault(); saveDashboardCompanyEdits();">
-        <!-- Tab 1: Profile -->
-        <div id="dashTabContentProfile" class="edit-tab-content">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div>
-              <label class="form-label">Company Name *</label>
-              <input id="dashEditName" type="text" class="form-control" required>
-            </div>
-            <div>
-              <label class="form-label">Website URL</label>
-              <input id="dashEditWebsite" type="text" class="form-control" placeholder="https://www.example.com">
-            </div>
-            <div>
-              <label class="form-label">Direct Phone</label>
-              <input id="dashEditPhone" type="text" class="form-control" placeholder="+1 (555) 000-0000">
-            </div>
-            <div>
-              <label class="form-label">Primary Email</label>
-              <input id="dashEditEmail" type="email" class="form-control" placeholder="contact@example.com">
-            </div>
-            <div>
-              <label class="form-label">Industry</label>
-              <input id="dashEditIndustry" type="text" class="form-control" placeholder="e.g. Automotive & Transportation">
-            </div>
-            <div>
-              <label class="form-label">Employee / Team Size</label>
-              <input id="dashEditSize" type="text" class="form-control" placeholder="e.g. 11-50">
-            </div>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Physical Street Address / Location</label>
-            <input id="dashEditAddress" type="text" class="form-control" placeholder="e.g. 123 Main St, Los Angeles, CA">
-          </div>
-        </div>
-
-        <!-- Tab 2: Contacts -->
-        <div id="dashTabContentContacts" class="edit-tab-content" style="display: none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <span style="font-size: 0.8rem; color: #a78bfa; font-weight: 700; text-transform: uppercase;">Key Decision Makers</span>
-            <button type="button" onclick="addDashboardModalContactRow()" class="btn btn-secondary btn-sm" style="color: #a78bfa; border-color: rgba(167,139,250,0.4);">+ Add Person</button>
-          </div>
-          <div id="dashModalContactsList" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;"></div>
-        </div>
-
-        <!-- Tab 3: Social Media -->
-        <div id="dashTabContentSocial" class="edit-tab-content" style="display: none;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div>
-              <label class="form-label">🔗 LinkedIn Company URL</label>
-              <input id="dashEditSocialLinkedIn" type="text" class="form-control" placeholder="https://www.linkedin.com/company/...">
-            </div>
-            <div>
-              <label class="form-label">🐦 Twitter / X Profile</label>
-              <input id="dashEditSocialTwitter" type="text" class="form-control" placeholder="https://x.com/...">
-            </div>
-            <div>
-              <label class="form-label">📘 Facebook Page</label>
-              <input id="dashEditSocialFacebook" type="text" class="form-control" placeholder="https://facebook.com/...">
-            </div>
-            <div>
-              <label class="form-label">📸 Instagram / YouTube</label>
-              <input id="dashEditSocialInstagram" type="text" class="form-control" placeholder="https://instagram.com/...">
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 4: Pitch & Battlecard -->
-        <div id="dashTabContentPitch" class="edit-tab-content" style="display: none;">
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🗣️ 30-Second Elevator Pitch Hook</label>
-            <textarea id="dashEditPitchHook" class="form-control" rows="3" placeholder="SDR opening script..."></textarea>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🎯 Big Binary Tech Strategic Angle</label>
-            <textarea id="dashEditPitchAngle" class="form-control" rows="2" placeholder="Why Big Binary Tech is the exact partner for them..."></textarea>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🚨 Operational Friction & Pain Points (1 per line)</label>
-            <textarea id="dashEditPitchPainPoints" class="form-control" rows="3" placeholder="Enter pain points, one per line..."></textarea>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">🛡️ Objection Handlers (Key: Value or Notes)</label>
-            <textarea id="dashEditPitchObjections" class="form-control" rows="3" placeholder="Notes or custom scripts..."></textarea>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem; margin-top: 1rem;">
-          <button type="button" onclick="closeDashboardEditModal()" class="btn btn-secondary">Cancel</button>
-          <button type="submit" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Changes</button>
-        </div>
-      </form>
     </div>
   </div>
 
-  <!-- Clay Integration Setup Modal -->
-  <div id="clayConfigModal" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1200; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div class="modal-content" style="max-width: 600px; width: 95%; background: #0c1427; border: 1px solid rgba(96,165,250,0.3); border-radius: 12px; padding: 1.75rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+  <!-- Lead Details Modal -->
+  <div id="leadModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
         <div>
-          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-            🧊 Clay.com Automated Integration Setup
-          </h3>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">Configure your Clay Inbound Webhook for 1-click waterfall enrichment</span>
+          <h2 id="modalCompanyName" style="font-size: 1.35rem; font-weight: 900; color: #ffffff;">Company Details</h2>
+          <div id="modalCompanyMeta" style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.2rem;"></div>
         </div>
-        <button onclick="closeClayConfigModal()" class="btn btn-secondary btn-sm" style="font-size: 1rem; padding: 0.2rem 0.6rem;">✕</button>
+        <button id="closeModalBtn" class="btn btn-secondary btn-sm">✕ Close</button>
       </div>
-
-      <div style="background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.25); border-radius: 8px; padding: 0.85rem 1rem; font-size: 0.825rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 1.25rem;">
-        <strong>How to get your Clay Webhook URL:</strong><br>
-        1. Open your <strong>Clay.com</strong> workspace & create a table.<br>
-        2. Click <strong>Import Data</strong> → <strong>Webhook</strong>.<br>
-        3. Copy the <strong>Inbound Webhook URL</strong> and paste it below.<br>
-        4. When you push leads, Clay receives them automatically, finds the CEO cell phone & verified email, and posts them back!
-      </div>
-
-      <div style="margin-bottom: 1.25rem;">
-        <label class="form-label">Clay Inbound Webhook URL</label>
-        <input id="clayWebhookInput" type="url" class="form-control" placeholder="https://api.clay.com/v3/sources/webhook/..." style="font-size: 0.85rem;">
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.25rem;">
-        <button type="button" onclick="closeClayConfigModal()" class="btn btn-secondary">Cancel</button>
-        <button type="button" onclick="saveClayConfig()" class="btn btn-accent" style="padding: 0.5rem 1.5rem; font-weight: 700;">💾 Save Configuration</button>
+      <div id="modalBody">
+        <!-- Lead details injected dynamically -->
       </div>
     </div>
   </div>
 
   <script src="js/app.js"></script>
 </body>
+
 </html>

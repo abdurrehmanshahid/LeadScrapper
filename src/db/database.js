@@ -216,9 +216,17 @@ class Database {
     const lead = await this.getLeadById(id);
     if (!lead) return null;
 
-    lead.call_status    = status;
-    lead.notes          = notes;
-    lead.follow_up_date = followUpDate !== undefined ? followUpDate : (lead.follow_up_date || null);
+    lead.call_status = status;
+    // APPEND the call note (timestamped) — never wipe existing notes. An empty
+    // note leaves prior notes untouched. (This previously overwrote notes with ''
+    // on every outcome log, silently destroying data.)
+    const note = (notes || '').trim();
+    if (note) {
+      const stamp = `[${new Date().toISOString().slice(0, 16).replace('T', ' ')}] (${status}) ${note}`;
+      lead.notes = lead.notes ? `${lead.notes}\n${stamp}` : stamp;
+    }
+    // Only change follow-up when a date is explicitly supplied; otherwise keep it.
+    if (followUpDate) lead.follow_up_date = followUpDate;
     lead.last_called_at = new Date().toISOString();
     lead.updated_at     = new Date().toISOString();
 
@@ -228,8 +236,8 @@ class Database {
       company_name: lead.name,
       phone: lead.phone,
       status,
-      notes,
-      follow_up_date: lead.follow_up_date,
+      notes: note,
+      follow_up_date: lead.follow_up_date || null,
       timestamp: new Date().toISOString()
     };
 
@@ -253,6 +261,18 @@ class Database {
     }
 
     return lead;
+  }
+
+  // Append a free-form, timestamped note to a lead without touching call_status.
+  async appendNote(id, text) {
+    const note = (text || '').trim();
+    if (!note) return null;
+    const lead = await this.getLeadById(id);
+    if (!lead) return null;
+
+    const stamp = `[${new Date().toISOString().slice(0, 16).replace('T', ' ')}] ${note}`;
+    const merged = lead.notes ? `${lead.notes}\n${stamp}` : stamp;
+    return this.updateLeadFields(id, { notes: merged });
   }
 
   async deleteLead(id) {
