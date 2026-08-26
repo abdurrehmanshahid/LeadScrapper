@@ -1,0 +1,7 @@
+# Windows batch files MUST be CRLF or cmd.exe fails to parse them.
+# Force it on checkout for every machine, regardless of core.autocrlf.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts stay LF.
+*.sh text eol=lf

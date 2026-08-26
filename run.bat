@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 title Big Binary Tech - Lead Engine
 color 0B
 
@@ -9,120 +9,89 @@ echo         Zero-API-Cost Lead Discovery, Web Audit and ML Propensity Scorer
 echo ===============================================================================
 echo.
 
-:: 1. Add common Node.js install directories to PATH
+rem 1. Add common Node.js install directories to PATH
 if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;%PATH%"
 if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;%PATH%"
 if exist "%LOCALAPPDATA%\Programs\node\node.exe" set "PATH=%LOCALAPPDATA%\Programs\node;%PATH%"
 
-:: 2. Add common Git install directories to PATH
+rem 2. Add common Git install directories to PATH
 if exist "C:\Program Files\Git\cmd\git.exe" set "PATH=C:\Program Files\Git\cmd;%PATH%"
 if exist "C:\Program Files\Git\bin\git.exe" set "PATH=C:\Program Files\Git\bin;%PATH%"
 if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "PATH=%LOCALAPPDATA%\Programs\Git\cmd;%PATH%"
 
-:: 3. Automatically pull latest updates and leads from GitHub
+rem 3. Pull latest code from GitHub. Live data lives in MongoDB Atlas, not git,
+rem    so back up + discard the local data mirrors first (they never conflict).
 where git >nul 2>nul
 if %errorlevel% equ 0 (
     if exist ".git\" (
         echo [*] Auto-Sync: Pulling latest code from GitHub...
-        :: Safety net: back up local data before touching it, so nothing is ever lost.
         if exist "data\leads_db.json" copy /Y "data\leads_db.json" "data\leads_db.backup.json" >nul 2>nul
-        :: Runtime data mirrors are local-only (Atlas is the source of truth). Discard any
-        :: local changes to them so the pull never conflicts on machine-specific data.
         git checkout -- data/leads_db.json data/call_logs.json >nul 2>nul
         git pull origin master
-        if errorlevel 1 (
-            git pull origin main
-        )
-        echo [*] Repository sync complete!
+        if errorlevel 1 git pull origin main
+        echo [*] Repository sync complete.
         echo.
     )
 )
 
-:: 4. Check if Node.js is installed
+rem 4. Check Node.js is installed
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] Node.js was not found on this computer!
-    echo.
-    echo Please install Node.js LTS from: https://nodejs.org
-    echo Once installed, run this script again.
+    echo [ERROR] Node.js was not found on this computer.
+    echo Install Node.js LTS from https://nodejs.org then run this script again.
     echo.
     pause
     exit /b 1
 )
 
-:: 5. Check and install dependencies
+rem 5. Install dependencies on first run
 if not exist "node_modules\" (
-    echo [*] First run on this PC detected! Installing required dependencies...
-    echo [*] This takes about 30 seconds...
+    echo [*] First run on this PC - installing dependencies...
     echo.
     call npm install
     if errorlevel 1 (
         echo.
-        echo [ERROR] Failed to install npm packages.
-        echo Please check your internet connection and run: npm install
+        echo [ERROR] npm install failed. Check your connection and run: npm install
         echo.
         pause
         exit /b 1
     )
-    echo.
-    echo [*] Dependencies installed successfully!
+    echo [*] Dependencies installed.
     echo.
 )
 
-:: 6. Check for .env configuration
+rem 6. Ensure a .env exists
 if not exist ".env" (
     if exist ".env.example" copy ".env.example" ".env" >nul 2>nul
     echo [i] Created default .env file.
-) else (
-    findstr /C:"cluster0.xxxxx.mongodb.net" ".env" >nul 2>nul
-    if %errorlevel% equ 0 (
-        if exist ".env.example" copy /Y ".env.example" ".env" >nul 2>nul
-        echo [i] Fixed outdated placeholder .env with active cluster URI.
-    )
 )
 
-:: 7. Auto-tunnel via ngrok so Clay can POST enrichment callbacks back in real-time.
-::    Uses your RESERVED domain so Clay's URL is identical on every launch, and
-::    auto-registers the authtoken from .env (ngrok_auth_token=...).
+rem 7. Auto-tunnel via ngrok on the reserved domain (stable URL for Clay every launch).
+rem    Registers the authtoken from .env if present.
 set "NGROK_DOMAIN=triage-garbage-sultry.ngrok-free.dev"
 where ngrok >nul 2>nul
 if %errorlevel% equ 0 (
-    :: Pull the authtoken out of .env and register it (harmless if already set)
     for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /c:"ngrok_auth_token=" ".env"`) do set "NGROK_TOKEN=%%B"
-    if defined NGROK_TOKEN (
-        ngrok config add-authtoken %NGROK_TOKEN% >nul 2>nul
-    )
-    echo [*] ngrok detected — starting public tunnel on %NGROK_DOMAIN% ...
-    start "" /B ngrok http 3000 --url https://%NGROK_DOMAIN% >nul 2>nul
-    :: Give ngrok 4 seconds to establish the tunnel
-    timeout /t 4 /nobreak >nul
-    :: Query ngrok local API for the HTTPS public URL (verification)
-    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "(Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction SilentlyContinue).tunnels | Where-Object { $_.proto -eq 'https' } | Select-Object -First 1 -ExpandProperty public_url"`) do set "NGROK_URL=%%U"
-    if defined NGROK_URL (
-        set "APP_URL=%NGROK_URL%"
-        echo [*] Clay callback URL live: %NGROK_URL%/api/leads/sync
-        echo [*] Clay will auto-update leads in real-time via this public URL.
-    ) else (
-        set "APP_URL=https://%NGROK_DOMAIN%"
-        echo [i] ngrok tunnel not confirmed on :4040 — defaulting APP_URL to https://%NGROK_DOMAIN%
-        echo [i] If Clay callbacks fail, check your authtoken in .env (ngrok_auth_token=...).
-    )
+    if defined NGROK_TOKEN ngrok config add-authtoken !NGROK_TOKEN! >nul 2>nul
+    echo [*] Starting ngrok tunnel on !NGROK_DOMAIN! ...
+    start "" /B ngrok http 3000 --url https://!NGROK_DOMAIN! >nul 2>nul
+    set "APP_URL=https://!NGROK_DOMAIN!"
+    echo [*] Clay callback URL: https://!NGROK_DOMAIN!/api/leads/sync
 ) else (
-    echo [i] ngrok not found — Clay real-time auto-update disabled.
-    echo [i] Install ngrok from https://ngrok.com and add it to your PATH to enable it.
+    echo [i] ngrok not found - real-time Clay callbacks disabled ^(local use still works^).
 )
 echo.
 
 echo [*] Starting Lead Intelligence Server on port 3000...
-echo [*] Opening Dashboard at: http://localhost:3000
+echo [*] Dashboard will open at http://localhost:3000
 echo.
 
-:: 8. Launch browser after 2 seconds
+rem 8. Open the browser a couple seconds after the server starts
 start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:3000"
 
-:: 9. Start Express Server (inherits APP_URL env var set above)
+rem 9. Start the Express server (inherits APP_URL set above)
 node src/server/app.js
 
 echo.
-echo [!] Server stopped.
+echo [x] Server stopped.
 pause
